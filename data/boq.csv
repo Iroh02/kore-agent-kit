@@ -1,0 +1,14 @@
+item_code,description,package,unit,qty,rate_aed,budget_cost_aed,actual_cost_aed,pct_complete
+A-101,Site setup and hoarding,preliminaries,LS,1,180000,150000,163000,100
+A-102,Temporary power and water,preliminaries,LS,1,95000,80000,88500,100
+B-201,Blockwork partitions,civil,m2,2400,145,290000,318000,92
+B-202,Gypsum ceiling,civil,m2,3100,120,320000,311000,88
+B-203,Floor screed,civil,m2,3100,65,180000,176000,95
+C-301,Chilled water piping,mep,m,1450,210,265000,301000,74
+C-302,Ductwork and insulation,mep,m2,2200,190,380000,372000,81
+C-303,Electrical containment,mep,m,3200,88,250000,247000,86
+C-304,Fire alarm system,mep,LS,1,410000,340000,396000,68
+D-401,Joinery and millwork,finishes,m2,860,690,520000,604000,55
+D-402,Painting and decoration,finishes,m2,5400,42,205000,198000,60
+D-403,Glazed partitions,finishes,m2,420,880,340000,352000,48
+E-501,FF and E installation,finishes,LS,1,260000,215000,209000,35

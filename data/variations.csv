@@ -1,0 +1,11 @@
+vo_ref,description,package,instructed_date,submitted_date,value_aed,status,time_impact_days
+VO-001,Additional power points level 3,mep,2026-03-04,2026-03-19,48000,approved,0
+VO-002,Upgrade joinery veneer spec,finishes,2026-03-18,2026-04-20,126000,disputed,7
+VO-003,Relocate AHU plantroom,mep,2026-04-02,2026-04-15,212000,approved,14
+VO-004,Extra blockwork to core walls,civil,2026-04-22,2026-05-30,67000,rejected,0
+VO-005,Feature lighting to reception,mep,2026-05-06,2026-05-21,89000,approved,3
+VO-006,Additional fire dampers,mep,2026-05-28,2026-06-25,54000,disputed,0
+VO-007,Revised floor finish to lobby,finishes,2026-06-10,2026-06-24,143000,submitted,5
+VO-008,Temporary works to facade,civil,2026-06-30,2026-08-02,78000,rejected,0
+VO-009,Additional BMS points,mep,2026-07-14,2026-07-30,96000,submitted,0
+VO-010,Acoustic treatment to boardroom,finishes,2026-08-05,2026-08-19,61000,submitted,4

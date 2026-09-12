@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Serve (F5)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.server",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "Smoke test",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "tests.smoke",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Evals",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app.evalkit",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

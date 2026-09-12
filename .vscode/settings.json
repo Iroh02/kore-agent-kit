@@ -1,0 +1,16 @@
+{
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.index.json": true
+  },
+  "python.analysis.typeCheckingMode": "basic",
+  "python.terminal.activateEnvironment": false,
+  "[python]": {
+    "editor.rulers": [88],
+    "editor.formatOnSave": false
+  },
+  "files.eol": "\n",
+  "search.exclude": {
+    "**/__pycache__": true
+  }
+}
