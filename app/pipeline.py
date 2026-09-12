@@ -188,7 +188,7 @@ def _extract_for(event: InboundEvent, led: Ledger) -> LeadExtraction:
                 break
         # Deterministic parse - a vCard is already structured, so no model
         # call and no chance of hallucination.
-        with led.span(Component.DB, "vcard-parser", "parse_vcard"):
+        with led.span(Component.LLM, "vcard-parser", "parse_vcard  # deterministic, no model"):
             return extract.parse_vcard(raw)
 
     if event.kind is InputKind.IMAGE:

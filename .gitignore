@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 .env
 .index.json
+.venv/
+venv/
+kore.db
+kore.db-journal
+*.sqlite
+fixtures/cards/*.png
