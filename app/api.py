@@ -15,15 +15,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from app import pipeline
-from app.schemas import InboundEvent, InputKind, PipelineResult
+from app.schemas import (
+    Component,
+    CostEntry,
+    InboundEvent,
+    InputKind,
+    PipelineResult,
+)
 from app.settings import settings
 from app.store import SQLiteStore
 
@@ -57,16 +64,58 @@ app = FastAPI(title="Chat-to-Lead", version="0.1.0", lifespan=lifespan)
 # ---------------------------------------------------------------------------
 
 
+async def _post_reply(event: InboundEvent, result: PipelineResult) -> None:
+    """Render the result as a card and post it into the conversation.
+
+    Bot Framework ignores this webhook's HTTP response body, so a reply only
+    reaches the chat by POSTing back to {serviceUrl}. Failures here are
+    swallowed on purpose: a non-200 makes Bot Framework redeliver, and a
+    redelivered activity is how one message becomes two leads.
+    """
+    from app.channels import cards  # local: avoid import cycle
+    from app.channels.teams import send_activity
+
+    if not (settings.teams_enabled and event.service_url and event.conversation_id):
+        result.ledger.entries.append(
+            CostEntry(
+                component=Component.CHANNEL_API,
+                service="teams.send_activity",
+                unit_label="calls",
+                detail="skipped: channel not configured",
+            )
+        )
+        return
+
+    reply = cards.render(result)
+    reply["replyToId"] = event.activity_id
+
+    started = time.perf_counter()
+    detail = "sent"
+    try:
+        await send_activity(event.service_url, event.conversation_id, reply)
+    except Exception as exc:  # noqa: BLE001 - never crash in front of the user
+        detail = f"send failed: {type(exc).__name__}: {exc}"
+
+    latency_ms = (time.perf_counter() - started) * 1000
+    result.ledger.entries.append(
+        CostEntry(
+            component=Component.CHANNEL_API,
+            service="teams.send_activity",
+            input_units=1.0,
+            unit_label="calls",
+            latency_ms=latency_ms,
+            detail=detail,
+        )
+    )
+    result.ledger.total_latency_ms += latency_ms
+
+
 @app.post("/api/messages")
 async def messages(request: Request):
     """Bot Framework posts every Teams activity here.
 
-    TODO(Vishal):
-      1. Validate the inbound JWT against Bot Framework's OpenID keys.
-         Skipped in the prototype - name it on the risks slide.
-      2. Map the Activity to InboundEvent (see channels/teams.py).
-      3. Download attachments -> Attachment.data.
-      4. Render the PipelineResult as an Adaptive Card and send_activity it.
+    TODO(Vishal): validate the inbound JWT against Bot Framework's OpenID
+    keys. Skipped in the prototype - name it on the risks slide.
     """
     activity = await request.json()
 
@@ -75,10 +124,12 @@ async def messages(request: Request):
     event = await to_inbound_event(activity)
     result = await pipeline.handle(event, store)
 
+    await _post_reply(event, result)
+
     publish({"type": "activity", "result": json.loads(result.model_dump_json())})
 
-    # TODO(Vishal): replace with cards.render(result) + send_activity(...)
-    return {"type": "message", "text": result.message}
+    # Body is ignored by Bot Framework; the reply went out via send_activity.
+    return Response(status_code=200)
 
 
 @app.post("/api/simulate")
