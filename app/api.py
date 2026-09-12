@@ -51,9 +51,19 @@ def publish(event: dict) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # TODO(Nandita): start the follow-up scheduler here.
-    #   from app.scheduler import start; task = start(store, publish)
-    yield
+    """Start the follow-up scheduler alongside the app.
+
+    It publishes every fired reminder to the dashboard feed, and also sends
+    to the chat when a channel is configured - so the "reminder fires live
+    mid-demo" beat works even if Teams sideloading is blocked.
+    """
+    from app.scheduler import start  # local: keeps import order simple
+
+    task = start(store, publish)
+    try:
+        yield
+    finally:
+        task.cancel()
 
 
 app = FastAPI(title="Chat-to-Lead", version="0.1.0", lifespan=lifespan)

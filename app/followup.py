@@ -35,9 +35,12 @@ _WEEKDAYS = {
     "friday": 4, "saturday": 5, "sunday": 6,
 }
 
-# "after 2 days", "in 3 weeks", "in a week"
+# "after 2 days", "in 3 weeks", "in a week", "in 2 minutes"
+# Minutes exist for the demo: "follow up in 2 minutes" lets a scheduled
+# reminder fire live in front of the room.
 _RELATIVE = re.compile(
-    r"\b(?:after|in)\s+(?P<n>\d+|a|an)\s+(?P<unit>hour|day|week|month)s?\b",
+    r"\b(?:after|in)\s+(?P<n>\d+|a|an)\s+"
+    r"(?P<unit>min|mins|minute|hour|day|week|month)s?\b",
     re.I,
 )
 # "tomorrow", "next week"
@@ -105,13 +108,18 @@ def parse_follow_up(
         n = 1 if raw_n in ("a", "an") else int(raw_n)
         unit = m.group("unit").lower()
         delta = {
+            # Minutes exist for the demo: "follow up in 2 minutes" lets a
+            # scheduled reminder fire live in front of the room.
+            "min": timedelta(minutes=n),
+            "mins": timedelta(minutes=n),
+            "minute": timedelta(minutes=n),
             "hour": timedelta(hours=n),
             "day": timedelta(days=n),
             "week": timedelta(weeks=n),
             "month": timedelta(days=30 * n),
         }[unit]
         due = now + delta
-        if unit != "hour":
+        if unit not in ("min", "mins", "minute", "hour"):
             due = due.replace(
                 hour=hour if hour is not None else DEFAULT_HOUR,
                 minute=minute or 0, second=0, microsecond=0,

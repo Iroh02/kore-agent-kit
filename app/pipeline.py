@@ -551,18 +551,16 @@ def _handle_command(event: InboundEvent, store: Store, led: Ledger) -> PipelineR
             lead=lead, ledger=led.finish(),
         )
 
-    if action == "provide_company":
-        # The answer to the mode-2 clarification question.
-        with led.span(Component.DB, "sqlite", "update_lead"):
-            lead = store.update_lead(
-                lead_id, {"company_name": cmd.get("company_name"),
-                          "status": LeadStatus.NEW}
-            )
-        return PipelineResult(
-            trace_id=led.trace_id, status=ResultStatus.UPDATED,
-            message=f"Thanks - lead created for {cmd.get('company_name')}.",
-            lead=lead, ledger=led.finish(),
-        )
+    # provide_company is deliberately GONE. It updated a lead by id, but the
+    # missing-company path never creates one - the extraction is parked until
+    # the answer arrives - so lead_id was always "", update_lead changed zero
+    # rows, and it still replied "Thanks - lead created". A button that claims
+    # a write that never happened, on the one beat whose whole point is that
+    # we do not invent data.
+    #
+    # Answering by typing is the correct path and is covered by demo_check:
+    #   _route -> _handle_clarification -> _answer_company -> _persist_lead
+    # An unknown action now falls through to the honest "Unknown action" below.
 
     return _fail(led, f"Unknown action: {action!r}")
 
