@@ -237,8 +237,7 @@ place."
 
 "My half is transport. Bytes in and out of the chat, and a card back."
 
-"No Microsoft SDK. The Bot Framework is JSON over HTTPS — about eighty lines
-we wrote ourselves. Get a token, post an activity, download an attachment."
+"No Microsoft SDK. The Bot Framework is JSON over HTTPS — about a hundred and thirty lines we wrote ourselves. Get a token, post an activity, download an attachment."
 
 "Everything downstream speaks a plain Python object. The chat app is an
 adapter, not the architecture — which is why the pipeline was built and
@@ -282,7 +281,7 @@ documented contract but unverified on a live tenant."
 "**The follow-up reminder is one-way.** Closing it from the chat needs a
 state machine on the follow-up, not a keyword. Day two."
 
-"We found and fixed twenty-four defects today, most of them from automated
+"We found and fixed nineteen defects today, most of them from automated
 adversarial passes over our own code — including one that would have frozen
 the whole process for thirty minutes on a bad network."
 
