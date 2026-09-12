@@ -7,3 +7,4 @@ venv/
 kore.db
 kore.db-journal
 *.sqlite
+demo_check.db
