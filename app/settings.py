@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # --- Speech to text ---------------------------------------------------
     # DECISIONS.md D14: pick one, don't revisit.
-    stt_provider: str = "mock-stt"  # deepgram-nova-3 | azure-speech-standard
+    stt_provider: str = "deepgram-nova-3"  # DECISIONS.md D14 - decided, do not revisit
     stt_api_key: str = ""
 
     # --- App --------------------------------------------------------------
