@@ -144,6 +144,12 @@ venv + `pip install -e .` works. Vishal uses `uv sync` — both fine.
 - Web Chat: **file and `.vcf` attachments are unvalidated** (need a real
   Teams client). Mode 2 demos via `send.py vcf` landing on the dashboard —
   say so plainly.
+- **Photo-style business cards** `fixtures/cards/05_photo_dark.jpg` and
+  `06_photo_light.jpg` (perspective, glare, desk background, QR block).
+  Both extracted every field correctly at 0.93 on the real vision path.
+  They cost ~$0.017–0.027 each, double the flat cards, because the JPEGs
+  are larger - say "two cents" if asked, not the slide's one cent.
+  `04_no_company.png` stays the refusal beat. `send.py card <file>` sends.
 - Deepgram heard synthetic TTS "Skyline Fitout" as "skyline feet out".
   Record a real human voice note before the demo; keep a typed lead as backup.
 - Only ONE machine can be the bot's messaging endpoint. It's Vishal's.
