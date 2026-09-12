@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chat-to-Lead · Live</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#272e38; --ink:#e6edf3;
+    --dim:#8b949e; --accent:#f0b429; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:12px 20px;
+         border-bottom:1px solid var(--line);background:var(--panel);
+         position:sticky;top:0;z-index:5;flex-wrap:wrap}
+  h1{font-size:16px;margin:0;letter-spacing:.2px}
+  .pill{font-size:11px;padding:3px 9px;border-radius:999px;
+        border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+  .pill.live{color:var(--ok);border-color:#1d572b}
+  .pill.mock{color:var(--warn);border-color:#5a4415}
+  main{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;padding:16px;
+       align-items:start}
+  @media (max-width:1000px){main{grid-template-columns:1fr}}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .hd{padding:10px 14px;border-bottom:1px solid var(--line);
+      font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .body{padding:6px 14px 14px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:500;font-size:11px;
+     text-transform:uppercase;letter-spacing:.08em;padding:8px 6px;
+     border-bottom:1px solid var(--line)}
+  td{padding:9px 6px;border-bottom:1px solid #1d232c;vertical-align:top}
+  tr.fresh{animation:flash 1.6s ease-out}
+  @keyframes flash{from{background:#1f2b1f}to{background:transparent}}
+  .muted{color:var(--dim)}
+  .tag{font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--line);
+       color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .tag.new{color:var(--ok);border-color:#1d572b}
+  .tag.needs_review,.tag.needs_clarification{color:var(--warn);border-color:#5a4415}
+  .tag.duplicate,.tag.failed{color:var(--bad);border-color:#5c2321}
+  .act{border-bottom:1px solid #1d232c;padding:10px 0}
+  .act:last-child{border-bottom:0}
+  .act .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .money{color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .spans{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .span{font-size:10px;padding:2px 7px;border-radius:4px;background:#1b2230;
+        color:var(--dim);font-variant-numeric:tabular-nums}
+  .totals{display:flex;gap:22px;padding:10px 14px;border-top:1px solid var(--line);
+          font-variant-numeric:tabular-nums}
+  .totals b{display:block;font-size:19px;color:var(--accent);font-weight:600}
+  .totals span{font-size:10px;color:var(--dim);text-transform:uppercase;
+               letter-spacing:.1em}
+  button{background:#21262d;color:var(--ink);border:1px solid var(--line);
+         border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer}
+  button:hover{border-color:#3d4655}
+  .empty{color:var(--dim);padding:18px 6px;font-size:13px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Chat-to-Lead</h1>
+  <span class="pill" id="p-claude">claude …</span>
+  <span class="pill" id="p-teams">teams …</span>
+  <span class="pill" id="p-stt">stt …</span>
+  <span class="pill" id="p-store">store …</span>
+  <span class="pill" id="p-conn">connecting…</span>
+</header>
+
+<main>
+  <section>
+    <div class="hd">Leads &mdash; persisted records</div>
+    <div class="body">
+      <table>
+        <thead><tr>
+          <th>Company</th><th>Contact</th><th>Mobile</th><th>Email</th>
+          <th>Source</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody id="leads"></tbody>
+      </table>
+      <div class="empty" id="leads-empty">No leads yet. Message the bot in Teams.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="hd">Solution economics &mdash; per activity</div>
+    <div class="body" id="acts">
+      <div class="empty">Waiting for activity…</div>
+    </div>
+    <div class="totals">
+      <div><b id="t-count">0</b><span>activities</span></div>
+      <div><b id="t-cost">$0.0000</b><span>total cost</span></div>
+      <div><b id="t-avg">0 ms</b><span>avg latency</span></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let count = 0, cost = 0, latency = 0;
+
+async function health(){
+  try{
+    const h = await (await fetch('/api/health')).json();
+    const set = (el, text, live) => {
+      const n = $(el); n.textContent = text;
+      n.className = 'pill ' + (live ? 'live' : 'mock');
+    };
+    set('p-claude', 'claude: ' + h.claude, h.claude === 'live');
+    set('p-teams',  'teams: '  + h.teams,  h.teams === 'live');
+    set('p-stt',    'stt: '    + h.stt,    h.stt !== 'mock-stt');
+    set('p-store',  h.store, false);   // always amber: it is our own store
+  }catch(e){
+    $('p-conn').textContent = 'server unreachable';
+    $('p-conn').className = 'pill mock';
+  }
+}
+
+function esc(s){ return (s ?? '').toString().replace(/[<>&]/g, c =>
+  ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+
+async function loadLeads(freshId){
+  const rows = await (await fetch('/api/leads')).json();
+  $('leads-empty').style.display = rows.length ? 'none' : 'block';
+  $('leads').innerHTML = rows.map(l => `
+    <tr class="${l.id === freshId ? 'fresh' : ''}">
+      <td>${esc(l.company_name) || '<span class="muted">—</span>'}</td>
+      <td>${esc([l.first_name, l.last_name].filter(Boolean).join(' ')) || '<span class="muted">—</span>'}</td>
+      <td>${esc(l.mobile) || '<span class="muted">—</span>'}</td>
+      <td>${esc(l.email) || '<span class="muted">—</span>'}</td>
+      <td><span class="tag">${esc(l.source_kind)}</span></td>
+      <td><span class="tag ${esc(l.status)}">${esc(l.status)}</span></td>
+      <td><button onclick="del('${l.id}')">Delete</button></td>
+    </tr>`).join('');
+}
+
+async function del(id){
+  await fetch('/api/leads/' + id, {method:'DELETE'});
+  loadLeads();
+}
+
+function addActivity(r){
+  const led = r.ledger || {entries:[], total_cost_usd:0, total_latency_ms:0};
+  count++; cost += led.total_cost_usd; latency += led.total_latency_ms;
+  $('t-count').textContent = count;
+  $('t-cost').textContent = '$' + cost.toFixed(4);
+  $('t-avg').textContent = Math.round(latency / count) + ' ms';
+
+  const spans = led.entries.map(e => `<span class="span">${esc(e.component)}
+      ${esc(e.service)} · ${e.latency_ms.toFixed(0)}ms
+      ${e.cost_usd ? '· $' + e.cost_usd.toFixed(4) : ''}</span>`).join('');
+
+  const el = document.createElement('div');
+  el.className = 'act';
+  el.innerHTML = `
+    <div class="top">
+      <span><span class="tag ${esc(r.status)}">${esc(r.status)}</span>
+        ${esc(r.message).slice(0,90)}</span>
+      <span class="money">$${led.total_cost_usd.toFixed(4)} ·
+        ${led.total_latency_ms.toFixed(0)}ms</span>
+    </div>
+    <div class="spans">${spans}</div>`;
+  const box = $('acts');
+  if (box.querySelector('.empty')) box.innerHTML = '';
+  box.prepend(el);
+}
+
+const es = new EventSource('/api/stream');
+es.onopen  = () => { $('p-conn').textContent = 'live'; $('p-conn').className='pill live'; };
+es.onerror = () => { $('p-conn').textContent = 'reconnecting…'; $('p-conn').className='pill mock'; };
+es.onmessage = ev => {
+  const msg = JSON.parse(ev.data);
+  if (msg.type === 'activity'){
+    addActivity(msg.result);
+    loadLeads(msg.result.lead && msg.result.lead.id);
+  } else {
+    loadLeads();
+  }
+};
+
+health(); loadLeads(); setInterval(health, 15000);
+</script>
+</body>
+</html>

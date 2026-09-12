@@ -1,83 +1,113 @@
-# kore-agent-kit
+# kore-agent-kit — Chat-to-Lead + Follow-up Automation
 
-A grounded agent over a document corpus, with a visible tool-call trace. Built
-for one-day builds where setup time is the enemy.
+Intrakore AI Hackathon, Use Case 01. Build window 11:00–17:00, demo at 17:00.
+Two people, one day.
 
-## Hard constraints, do not break these
+**What it does:** a salesperson in Microsoft Teams sends lead details, meeting
+notes and follow-up instructions to a bot. The bot extracts structured data,
+persists it, confirms back what it created or asks for what's missing, and
+schedules the follow-up. Every action is priced and timed.
 
-- **Python standard library only.** No pip installs, no third-party imports in
-  `app/`. `pypdf` is the single optional exception and its import is already
-  wrapped in a try/except. If a task seems to need a dependency, say so and
-  propose it rather than adding one.
-- **The app must run with no API key.** `config.PROVIDER` falls back to `mock`,
-  where retrieval is real and only the final answer is canned. Any change that
-  makes a missing key fatal is a bug, because mock mode is the demo's fallback
-  when the venue wifi dies.
-- **No vector database, no agent framework.** The retrieval and the loop are
-  hand-rolled on purpose: they are small enough to debug under time pressure.
+> This repo previously held a RAG kit. That is gone. Files under `app/` that
+> aren't in the layout table below are dead and pending deletion — do not
+> import them, do not fix them.
+
+## Hard constraints
+
+- **Nothing crashes in front of the salesperson.** Every external call — Claude,
+  speech-to-text, Teams — degrades to a typed error the bot can say out loud.
+  A failed extraction asks a question. It never 500s into silence.
+- **Never invent a field value.** A missing field comes back as `None` and the
+  bot asks for it. Hallucinating a phone number is worse than admitting we
+  didn't get one. This is the single most important rule in the repo.
+- **Never silently guess a date.** `FollowUpParse` is tri-state:
+  `RESOLVED | AMBIGUOUS | NONE`. "Follow up after 2 days" resolves.
+  "Next week sometime" must return a question. The brief scores this.
+- **Every LLM call is priced from real usage.** `response.usage`, real
+  per-MTok rates, into the ledger. Never estimated, never skipped, never
+  bolted on afterwards.
+- **Idempotency on `activity_id`.** Teams retries deliveries. One message must
+  never become two leads.
+
+## Architecture
+
+This is a **deterministic pipeline, not an agent.** Input type is known,
+output schema is known, so control flow is code, not model-decided. That's
+what makes cost and latency explainable — a scored requirement.
+
+```
+Teams ──> channels/teams.py ──> InboundEvent ──> pipeline.handle() ──> PipelineResult ──> Adaptive Card
+                                                      │
+                                   ┌──────────────────┼──────────────────┐
+                                   │                  │                  │
+                              extract.py         followup.py         store.py
+                          (messages.parse)    (tri-state dates)   (interface + sqlite)
+                                   │                  │                  │
+                                   └──────── ledger.py (cost + latency) ─┘
+```
+
+**The one exception:** chat CRUD ("change the mobile for the Acme lead")
+*is* open-ended, so it uses tool use via the SDK's own tool runner —
+`client.beta.messages.tool_runner` with `strict: true` on each tool.
+No agent framework. The SDK already has the loop; a framework would add an
+abstraction over prompts we didn't write and make token attribution
+impossible.
+
+## Layout and ownership
+
+Split by file. Do not edit someone else's column.
+
+| Path | Role | Owner |
+|---|---|---|
+| `app/schemas.py` | **The contract.** Pydantic models both sides import | Nandita — announce before editing |
+| `app/extract.py` | Claude extraction: text, vCard, vision, transcript | Nandita |
+| `app/followup.py` | Date parsing, tri-state ambiguity | Nandita |
+| `app/store.py` | `Store` interface + SQLite implementation + CRUD | Nandita |
+| `app/ledger.py` | Cost + latency accounting, rate table | Nandita |
+| `app/pipeline.py` | Router, retry/abstain policy, duplicate handling | Nandita |
+| `app/scheduler.py` | Follow-up firing + proactive send | Nandita |
+| `app/transcribe.py` | Speech-to-text vendor call | Nandita |
+| `tests/` | Extraction evals against labelled fixtures | Nandita |
+| `app/api.py` | FastAPI app, `/api/messages` webhook, REST CRUD | Vishal |
+| `app/channels/teams.py` | Transport only: `get_token`, `send_activity`, `fetch_attachment` | Vishal |
+| `app/channels/cards.py` | Adaptive Cards + button payloads | Vishal |
+| `fixtures/` | Captured real Teams payloads | Vishal |
+
+The line: **Vishal moves bytes, Nandita interprets them.** `teams.py` returns
+raw attachment bytes and never inspects them; everything that decides what
+bytes *mean* lives in the pipeline.
+
+## Conventions
+
+- **`schemas.py` is strict-schema friendly.** Flat fields, `Optional`, no
+  `dict[str, X]`, no unions beyond `Optional`. These models go straight to
+  `messages.parse(output_format=...)` and a clever type breaks the call.
+- **Extraction returns a model or raises.** One retry with the validation
+  error fed back, then abstain and ask. Never regex over model prose.
+- **Model:** `claude-opus-5` for extraction and vision. Model IDs and rates
+  live in `ledger.py` — one place, nowhere else.
+- **Prompt caching:** stable system prompt behind a `cache_control`
+  breakpoint, volatile content after it. Verify with
+  `usage.cache_read_input_tokens` — a zero means something is invalidating it.
+- **Every pipeline step appends a `CostEntry`**, including DB and channel
+  calls where cost is 0 but latency isn't.
+- **Anything mocked is labelled in the code and on the risks slide.** The
+  brief scores transparency and punishes hidden gaps.
 
 ## Run it
 
 ```bash
-python3 -m tests.smoke     # full chain, ~10s, run this after any change
-python3 -m app.server      # http://localhost:8000
-python3 -m app.evalkit     # pass/fail against tests/eval_cases.json
+uv sync
+uv run uvicorn app.api:app --reload --port 8000
 ```
 
-On Windows use `python` if `python3` is not on PATH.
+`/docs` gives the live OpenAPI page — use it as the architecture artifact in
+the demo.
 
-## Layout
+## Git
 
-| Path | Role |
-|---|---|
-| `app/config.py` | env loading, provider selection, paths |
-| `app/llm.py` | OpenAI-compatible client on urllib, retries, mock provider |
-| `app/rag.py` | heading-aware chunking, TF-IDF with stemming, cosine search |
-| `app/tools.py` | tool registry: functions + JSON schemas |
-| `app/agent.py` | tool-calling loop, system prompt, trace assembly |
-| `app/server.py` | stdlib HTTP server, JSON API, serves the UI |
-| `app/evalkit.py` | eval harness |
-| `ui/index.html` | single-file chat UI with a live trace panel |
-| `data/` | the corpus, swapped per problem |
+Both work on `main`. No branches, no PRs. `git pull --rebase` before every
+push, push every 20–30 minutes. See `WORKING-AGREEMENT.md`.
 
-## Conventions
-
-- **Tools return strings**, and short ones. Long tool output makes the agent
-  drift and burns the context the answer needs.
-- **A tool's `description` is a prompt.** When an agent misuses a tool, fix the
-  description before touching the loop.
-- Adding a tool means three things: the function, an entry in `REGISTRY`, and a
-  schema in `SCHEMAS`. **Append at the bottom of `tools.py`** and do not reorder
-  what is there, so two people can add tools without conflicting.
-- New behaviour needs a case in `tests/eval_cases.json`. Assertions are
-  substring checks on the answer: cheap, and enough.
-- Never commit `.env`. It is gitignored, keep it that way.
-
-## Working here during a build
-
-- Prefer the smallest change that makes one real question work end to end.
-  Breadth is worth less than one flow that is solid.
-- Do not add auth, a database, deployment, or a second data source. They are on
-  the cut list in `WORKING-AGREEMENT.md` for a reason.
-- If asked to swap TF-IDF for embeddings, ask what evidence says retrieval is
-  the bottleneck first. Usually it is the chunking or the tool description.
-- Two people work on `main` with `git pull --rebase`. See
-  `WORKING-AGREEMENT.md` for the file ownership split.
-
-## Higgsfield AI, if we end up using it
-
-The use case is not decided yet. Until it is, **do not write the integration.**
-When it is decided, it goes in as a tool and nothing else:
-
-- **No SDK, no pip install.** It is an HTTP API; call it with `urllib` like
-  `llm.py` already calls the model. The stdlib rule is not negotiable for this.
-- **A new tool at the bottom of `tools.py`**, with its key read in
-  `config.py` from `.env` as `HIGGSFIELD_API_KEY`.
-- **It must degrade, not raise.** No key, or the call fails, the tool returns a
-  short string saying so and the agent carries on. Same reason mock mode
-  exists: a missing credential must never be able to take the demo down.
-- **Generated media is a URL in the answer, not bytes through the server.**
-  We are not adding storage.
-
-If the use case is "make the demo video", that is not an integration at all,
-it is an asset. Generate it outside the repo and keep the code untouched.
+Freeze at **16:15** — record the screen capture, then only demo-breaking
+fixes. See `DECISIONS.md` for why every choice above was made.
