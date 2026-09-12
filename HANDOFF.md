@@ -106,6 +106,14 @@ venv + `pip install -e .` works. Vishal uses `uv sync` — both fine.
   their own DBs.
 - **`send.py reset` then reload the dashboard** before each rehearsal and
   before 17:00 — the dashboard counters are client-side.
+- **Dashboard averages (fixed 15:35):** a Teams retry returns the original
+  result with the same `trace_id` and the webhook publishes it again, so
+  the dashboard was counting cost and latency twice. It now dedupes on
+  `trace_id` and tags the entry "replay · not counted". The latency tile
+  shows two figures: all activities (button taps and `.vcf` parses at ~3 ms
+  included) and model calls only. Quote the second one against the slide
+  table. Still not in the total on the Teams path: attachment download
+  (happens before the ledger starts) — Vishal's column.
 - An unanswered bot question stays live 10 min. Tapping "Add note" clears it.
   Typing `cancel` or `never mind` clears any pending state and says so.
 - Web Chat: **file and `.vcf` attachments are unvalidated** (need a real

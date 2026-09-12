@@ -167,7 +167,7 @@
       <div class="totals">
         <div class="tot"><b id="t-count">0</b><span>activities</span></div>
         <div class="tot"><b id="t-cost">$0.0000</b><span>total cost</span></div>
-        <div class="tot"><b id="t-avg">0<small style="font-size:15px"> ms</small></b><span>avg latency</span></div>
+        <div class="tot"><b id="t-avg">0<small style="font-size:15px"> ms</small></b><span>avg latency, all activities</span><span id="t-avg-model" style="display:block;margin-top:2px">no model calls yet</span></div>
       </div>
       <div class="split">
         <div class="lbl">Cost by component</div>
@@ -183,6 +183,15 @@
 const $ = id => document.getElementById(id);
 const esc = s => (s ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 let count = 0, cost = 0, latency = 0;
+// Activities that went to a model (llm / vision / stt). A button tap or a
+// .vcf parse is a real activity at ~3 ms, and blending those into one mean
+// makes "avg latency" read as neither number. Both are shown.
+let modelCount = 0, modelLatency = 0;
+// Teams retries deliveries. The pipeline is idempotent - a replay returns
+// the ORIGINAL result, same trace_id, same ledger - and the webhook still
+// publishes it. Counting it again doubles the cost and latency of that
+// activity. Dedupe here so the totals count work done, not deliveries.
+const seenTraces = new Set();
 const byComponent = {};
 const COLORS = {llm:'#5AA9E6', vision:'#F0A93B', stt:'#C48BE0', db:'#4ED08A', channel_api:'#8496A6'};
 
@@ -243,13 +252,24 @@ function renderSplit(){
 
 function addActivity(r){
   const led = r.ledger || {entries:[],total_cost_usd:0,total_latency_ms:0};
-  count++; cost += led.total_cost_usd; latency += led.total_latency_ms;
+  const traceId = led.trace_id || r.trace_id;
+  const replay = traceId && seenTraces.has(traceId);
+  if(!replay){
+    if(traceId) seenTraces.add(traceId);
+    count++; cost += led.total_cost_usd; latency += led.total_latency_ms;
+    // cost > 0: the .vcf parser logs under llm at $0, and a mocked vendor is not a model call.
+    if(led.entries.some(e => (e.component==='llm' || e.component==='vision' || e.component==='stt') && e.cost_usd > 0)){
+      modelCount++; modelLatency += led.total_latency_ms;
+    }
+    led.entries.forEach(e => { byComponent[e.component] = (byComponent[e.component]||0) + (e.cost_usd||0); });
+    renderSplit();
+  }
   $('t-count').textContent = count;
   $('t-cost').textContent = '$'+cost.toFixed(4);
   $('t-avg').innerHTML = Math.round(latency/count)+'<small style="font-size:15px"> ms</small>';
-
-  led.entries.forEach(e => { byComponent[e.component] = (byComponent[e.component]||0) + (e.cost_usd||0); });
-  renderSplit();
+  $('t-avg-model').textContent = modelCount
+    ? `model calls: ${modelCount} · avg ${Math.round(modelLatency/modelCount)} ms`
+    : 'no model calls yet';
 
   const spans = led.entries.map(e =>
     `<span class="sp">${esc(e.component)} · ${esc(e.service)} · ${e.latency_ms.toFixed(0)}ms${
@@ -258,7 +278,8 @@ function addActivity(r){
   const el = document.createElement('div');
   el.className = 'act';
   el.innerHTML = `<div class="top">
-      <span class="msg"><span class="tag ${esc(r.status)}">${esc(r.status).replace(/_/g,' ')}</span>
+      <span class="msg"><span class="tag ${esc(r.status)}">${esc(r.status).replace(/_/g,' ')}</span>${
+        replay ? '<span class="tag duplicate">replay · not counted</span>' : ''}
         ${esc(r.message).slice(0,110)}</span>
       <span class="money">$${led.total_cost_usd.toFixed(4)}<br>${led.total_latency_ms.toFixed(0)} ms</span>
     </div><div class="spans">${spans}</div>`;
