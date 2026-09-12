@@ -104,6 +104,31 @@ Paperclip → `fixtures\cards\05_photo_dark.jpg`
 
 ---
 
+## 3:05 — Shared contact  *(optional, 15 seconds — cut this first if behind)*
+
+Paperclip → `fixtures\contacts\ahmed-with-company.vcf`
+
+**Web Chat does not validate `.vcf` attachments.** Test it once before 17:00.
+If the paperclip misbehaves, use the tool instead and say so plainly:
+
+```
+.venv\Scripts\python tools\send.py vcf fixtures\contacts\ahmed-with-company.vcf
+```
+
+→ *"Lead created for Jebel Ali Joinery."* in about 3 ms.
+
+**Nandita says:** "Zero. Not rounded — zero. No model was called at all. A
+vCard is already structured, so we parse it."
+
+> This is the strongest single cost number in the demo. If you skip the
+> beat, Nandita quotes it off the economics table instead.
+>
+> The other file, `layla-no-company.vcf`, has no company and triggers the
+> same refusal as the business card. Don't use both — one refusal beat is
+> enough, and the card is the better one.
+
+---
+
 ## 3:20 — Duplicate
 
 ```

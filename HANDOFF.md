@@ -141,6 +141,10 @@ venv + `pip install -e .` works. Vishal uses `uv sync` — both fine.
   the loop (Done / Snooze buttons on the reminder card) is a day-two flow.
 - `demo_check` prints `due … 05:00` — that is UTC storage; the bot's
   message says 09:00 local. Both correct.
+- **vCard fixtures now exist** at `fixtures/contacts/`:
+  `ahmed-with-company.vcf` creates "Jebel Ali Joinery" at $0.000000 / ~2ms;
+  `layla-no-company.vcf` triggers the company clarification. Both verified
+  through the pipeline. `send.py vcf <file>` sends one.
 - Web Chat: **file and `.vcf` attachments are unvalidated** (need a real
   Teams client). Mode 2 demos via `send.py vcf` landing on the dashboard —
   say so plainly.
