@@ -63,3 +63,21 @@ On Windows use `python` if `python3` is not on PATH.
   the bottleneck first. Usually it is the chunking or the tool description.
 - Two people work on `main` with `git pull --rebase`. See
   `WORKING-AGREEMENT.md` for the file ownership split.
+
+## Higgsfield AI, if we end up using it
+
+The use case is not decided yet. Until it is, **do not write the integration.**
+When it is decided, it goes in as a tool and nothing else:
+
+- **No SDK, no pip install.** It is an HTTP API; call it with `urllib` like
+  `llm.py` already calls the model. The stdlib rule is not negotiable for this.
+- **A new tool at the bottom of `tools.py`**, with its key read in
+  `config.py` from `.env` as `HIGGSFIELD_API_KEY`.
+- **It must degrade, not raise.** No key, or the call fails, the tool returns a
+  short string saying so and the agent carries on. Same reason mock mode
+  exists: a missing credential must never be able to take the demo down.
+- **Generated media is a URL in the answer, not bytes through the server.**
+  We are not adding storage.
+
+If the use case is "make the demo video", that is not an integration at all,
+it is an asset. Generate it outside the repo and keep the code untouched.
