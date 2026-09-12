@@ -404,6 +404,19 @@ def _handle_capture(event: InboundEvent, store: Store, led: Ledger) -> PipelineR
         # record. When the answer arrives, _answer_company rehydrates this
         # payload rather than re-running the model, which keeps the whole
         # clarification round trip free.
+        if not any(getattr(extraction, f, None) for f in NICE_TO_HAVE):
+            # Nothing extracted at all - "thanks", "hi", "done follow up".
+            # That is not a contact with a missing company, it is not a
+            # lead. Say what the bot takes and park NOTHING: an all-None
+            # parked question ate the next message. READ, not FAILED - the
+            # dashboard paints FAILED red and every "thanks" would show.
+            return PipelineResult(
+                trace_id=led.trace_id, status=ResultStatus.READ,
+                message=("I didn't spot lead details in that. Send me a contact, "
+                         "a business-card photo, a voice note, or type the name, "
+                         "company, mobile and email and I'll create the lead."),
+                ledger=led.finish(),
+            )
         question = _ask_for(missing, extraction)
         payload = extraction.model_dump()
         payload["_source_kind"] = event.kind.value

@@ -92,6 +92,10 @@ first week-two experiment, against the eval set. **Intrakore runs on AWS
     1.0 and the bot said "I've got this contact"
 17. A photo or `.vcf` arriving while a question / Add-note was open left it
     armed, so the next typed sentence became that lead's company name
+19. Chit-chat ("thanks", "hi", "done follow up") parked a "which company?"
+    about a contact that didn't exist, and the parked question ate the
+    next message. Now: "I didn't spot lead details in that…" and nothing
+    parked. Still one Claude call (~$0.0013) - a pre-model gate is week two
 18. Follow-up times were UTC: "in 2 minutes" printed a clock 4 h off the
     wall, and the dashboard (browser-local) disagreed with the card. Now
     parsed in Asia/Dubai (`followup.LOCAL_TZ`), stored UTC, shown local
@@ -132,6 +136,9 @@ venv + `pip install -e .` works. Vishal uses `uv sync` — both fine.
   photo / `.vcf` that isn't claimed as an answer also clears it (15:50).
 - **A follow-up typed in the same message as a new lead is ignored.** Only
   `attach_note` parses follow-ups. Beat 6: tap "Add note" first, then type.
+- **The reminder is one-way.** After it fires, do not type a reply to it -
+  "done" gets the "didn't spot lead details" message. If asked, say closing
+  the loop (Done / Snooze buttons on the reminder card) is a day-two flow.
 - `demo_check` prints `due … 05:00` — that is UTC storage; the bot's
   message says 09:00 local. Both correct.
 - Web Chat: **file and `.vcf` attachments are unvalidated** (need a real
