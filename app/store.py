@@ -70,6 +70,11 @@ class Store(Protocol):
     def seen_activity(self, activity_id: str) -> str | None: ...
     def mark_activity(self, activity_id: str, result_json: str) -> None: ...
 
+    # pending-note state: what "Add note" sets, and the router reads
+    def set_pending_note(self, user_id: str, conversation_id: str, lead_id: str) -> None: ...
+    def get_pending_note(self, user_id: str, conversation_id: str) -> str | None: ...
+    def clear_pending_note(self, user_id: str, conversation_id: str) -> None: ...
+
     # leads
     def create_lead(self, lead: Lead) -> Lead: ...
     def get_lead(self, lead_id: str) -> Lead | None: ...
@@ -105,6 +110,18 @@ CREATE TABLE IF NOT EXISTS activities (
     activity_id TEXT PRIMARY KEY,
     result_json TEXT NOT NULL,
     created_at  TEXT NOT NULL
+);
+
+-- Set when the salesperson taps "Add note" on a lead card. The router reads
+-- it to decide whether the NEXT message is a new lead or a note on this one.
+-- Keyed per user per conversation so two people in the same chat don't
+-- collide.
+CREATE TABLE IF NOT EXISTS pending_notes (
+    user_id         TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    lead_id         TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    PRIMARY KEY (user_id, conversation_id)
 );
 
 CREATE TABLE IF NOT EXISTS leads (
@@ -181,6 +198,29 @@ class SQLiteStore:
         )
         self._conn.commit()
 
+    # -- pending note state -------------------------------------------------
+
+    def set_pending_note(self, user_id: str, conversation_id: str, lead_id: str) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO pending_notes VALUES (?, ?, ?, ?)",
+            (user_id, conversation_id, lead_id, _now().isoformat()),
+        )
+        self._conn.commit()
+
+    def get_pending_note(self, user_id: str, conversation_id: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT lead_id FROM pending_notes WHERE user_id = ? AND conversation_id = ?",
+            (user_id, conversation_id),
+        ).fetchone()
+        return row["lead_id"] if row else None
+
+    def clear_pending_note(self, user_id: str, conversation_id: str) -> None:
+        self._conn.execute(
+            "DELETE FROM pending_notes WHERE user_id = ? AND conversation_id = ?",
+            (user_id, conversation_id),
+        )
+        self._conn.commit()
+
     # -- leads --------------------------------------------------------------
 
     def create_lead(self, lead: Lead) -> Lead:
@@ -246,6 +286,9 @@ class SQLiteStore:
         # without it, and leaving orphans makes the CRUD demo look sloppy.
         self._conn.execute("DELETE FROM notes WHERE lead_id = ?", (lead_id,))
         self._conn.execute("DELETE FROM follow_ups WHERE lead_id = ?", (lead_id,))
+        # A deleted lead must not stay pending, or the next message would
+        # attach a note to a lead that no longer exists.
+        self._conn.execute("DELETE FROM pending_notes WHERE lead_id = ?", (lead_id,))
         self._conn.commit()
         return cur.rowcount > 0
 

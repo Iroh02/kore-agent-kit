@@ -90,6 +90,12 @@ def _lead_card(result: PipelineResult) -> dict:
             _cost_line(result),
         ],
         actions=[
+            # "Add note" scopes the salesperson's NEXT message to this lead,
+            # so the router can tell a meeting note from a new lead without
+            # guessing. See pipeline._route. Keep this first - it is the
+            # action they reach for most.
+            {"type": "Action.Submit", "title": "Add note",
+             "data": {"action": "add_note", "lead_id": lead.id}},
             # TODO(Vishal): Action.ShowCard with Input.Text fields for edit.
             {"type": "Action.Submit", "title": "Edit",
              "data": {"action": "update_lead", "lead_id": lead.id}},

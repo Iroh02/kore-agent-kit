@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from app import extract, followup
+from app import extract, followup, transcribe
 from app.ledger import Ledger
 from app.schemas import (
     Component,
@@ -78,11 +78,66 @@ async def handle(event: InboundEvent, store: Store) -> PipelineResult:
 
 
 async def _route(event: InboundEvent, store: Store, led: Ledger) -> PipelineResult:
+    # Card buttons are explicit instructions; they always win.
     if event.kind is InputKind.COMMAND:
         return _handle_command(event, store, led)
+
+    # Is this message a NOTE on an existing lead rather than a new lead?
+    # We do not guess. The salesperson tapped "Add note" on a lead card,
+    # which set this flag - so the next thing they send is scoped to it.
+    # A classifier would be more elegant and can misfire live; this cannot.
+    if event.kind in (InputKind.TEXT, InputKind.AUDIO):
+        with led.span(Component.DB, "sqlite", "get_pending_note"):
+            pending_lead_id = store.get_pending_note(
+                event.user_id, event.conversation_id
+            )
+        if pending_lead_id:
+            return _handle_note(event, pending_lead_id, store, led)
+
     if event.kind in (InputKind.TEXT, InputKind.IMAGE, InputKind.CONTACT, InputKind.AUDIO):
         return _handle_capture(event, store, led)
     return _fail(led, "I don't know how to handle that kind of message yet.")
+
+
+def _handle_note(
+    event: InboundEvent, lead_id: str, store: Store, led: Ledger
+) -> PipelineResult:
+    """A message arriving while a lead is pending a note.
+
+    Text goes straight through; a voice note is transcribed first. The
+    original input is retained either way, which the brief requires.
+    """
+    text = event.text
+    media_ref = None
+
+    if event.kind is InputKind.AUDIO:
+        att = next((a for a in event.attachments if a.data), None)
+        if not att:
+            return _fail(led, "I couldn't read that voice note. Try sending it again?")
+        try:
+            text, _seconds = transcribe.transcribe(att.data, att.content_type, led)
+        except transcribe.TranscriptionFailed as exc:
+            # Degrade, don't crash: keep the lead pending so they can retry
+            # or just type it.
+            result = _clarify(
+                led,
+                "I couldn't transcribe that voice note. Could you type the "
+                "notes instead?",
+                missing=[],
+                detail=str(exc),
+            )
+            return result
+        media_ref = att.name
+
+    if not text.strip():
+        return _fail(led, "That looked empty - what came out of the meeting?")
+
+    result = attach_note(lead_id, text, event.kind, store, led, media_ref=media_ref)
+
+    # Note captured, so stop scoping messages to this lead.
+    with led.span(Component.DB, "sqlite", "clear_pending_note"):
+        store.clear_pending_note(event.user_id, event.conversation_id)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +360,24 @@ def _handle_command(event: InboundEvent, store: Store, led: Ledger) -> PipelineR
     cmd = event.command or {}
     action = cmd.get("action")
     lead_id = cmd.get("lead_id", "")
+
+    if action == "add_note":
+        lead = store.get_lead(lead_id)
+        if not lead:
+            return _fail(led, "I couldn't find that lead.")
+        with led.span(Component.DB, "sqlite", "set_pending_note"):
+            store.set_pending_note(event.user_id, event.conversation_id, lead_id)
+        who = lead.company_name or "that lead"
+        return PipelineResult(
+            trace_id=led.trace_id,
+            status=ResultStatus.READ,
+            message=(
+                f"Go ahead - send me the notes for {who}. Text or a voice note "
+                f"both work. Include when to follow up if there is one."
+            ),
+            lead=lead,
+            ledger=led.finish(),
+        )
 
     if action == "delete_lead":
         with led.span(Component.DB, "sqlite", "delete_lead"):
