@@ -210,10 +210,20 @@ async def to_inbound_event(activity: dict) -> InboundEvent:
 
         try:
             att.data = await fetch_attachment(att)
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - a dead download is a question, not a crash
             # Leave data unset; the pipeline turns that into a question
-            # rather than a crash.
-            pass
+            # rather than a crash. But say so on the console: this is the
+            # only place a dead download is otherwise invisible, and the
+            # auth story here is genuinely untested - a live Web Chat
+            # attachment URL carries its own ?t= JWT AND gets a bearer
+            # header, a combination that has never run against Microsoft's
+            # server. If that 401s, this line is the difference between
+            # diagnosing it in ten seconds and guessing.
+            print(
+                f"  [attachment fetch failed] {att.name} "
+                f"({att.content_type}, auth={att.requires_auth}): "
+                f"{type(exc).__name__}: {exc}"
+            )
         attachments.append(att)
 
     # Most specific wins, so a caption plus a card photo is still an IMAGE.
