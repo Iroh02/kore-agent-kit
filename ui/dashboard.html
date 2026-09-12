@@ -4,213 +4,292 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Chat-to-Lead · Live</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
   :root{
-    --bg:#0d1117; --panel:#161b22; --line:#272e38; --ink:#e6edf3;
-    --dim:#8b949e; --accent:#f0b429; --ok:#3fb950; --warn:#d29922; --bad:#f85149;
+    --bg:#0B1017; --panel:#141C26; --sunk:#0F161E; --line:#26323F;
+    --ink:#E8EEF4; --dim:#8496A6; --amber:#F0A93B; --blue:#5AA9E6;
+    --ok:#4ED08A; --warn:#F0C23B; --bad:#FF6B6B;
+    --display:"Barlow Condensed","Arial Narrow",sans-serif;
+    --body:"IBM Plex Sans",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
   }
   *{box-sizing:border-box}
+  html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--ink);
-       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif}
-  header{display:flex;align-items:center;gap:14px;padding:12px 20px;
+       font-family:var(--body);font-size:15px;line-height:1.5}
+
+  header{display:flex;align-items:center;gap:16px;padding:14px 24px;
          border-bottom:1px solid var(--line);background:var(--panel);
-         position:sticky;top:0;z-index:5;flex-wrap:wrap}
-  h1{font-size:16px;margin:0;letter-spacing:.2px}
-  .pill{font-size:11px;padding:3px 9px;border-radius:999px;
+         position:sticky;top:0;z-index:10;flex-wrap:wrap}
+  h1{font-family:var(--display);font-size:26px;font-weight:700;margin:0;
+     letter-spacing:.02em;text-transform:uppercase;white-space:nowrap}
+  h1 span{color:var(--amber)}
+  .pills{display:flex;gap:8px;flex-wrap:wrap;flex:1}
+  .pill{font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:3px;
         border:1px solid var(--line);color:var(--dim);white-space:nowrap}
-  .pill.live{color:var(--ok);border-color:#1d572b}
-  .pill.mock{color:var(--warn);border-color:#5a4415}
-  main{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;padding:16px;
+  .pill.live{color:var(--ok);border-color:#1F5637;background:#0E2318}
+  .pill.mock{color:var(--warn);border-color:#5A4715;background:#231C08}
+
+  main{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;padding:16px 24px 28px;
        align-items:start}
-  @media (max-width:1000px){main{grid-template-columns:1fr}}
-  section{background:var(--panel);border:1px solid var(--line);border-radius:10px}
-  .hd{padding:10px 14px;border-bottom:1px solid var(--line);
-      font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
-  .body{padding:6px 14px 14px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th{text-align:left;color:var(--dim);font-weight:500;font-size:11px;
-     text-transform:uppercase;letter-spacing:.08em;padding:8px 6px;
-     border-bottom:1px solid var(--line)}
-  td{padding:9px 6px;border-bottom:1px solid #1d232c;vertical-align:top}
-  tr.fresh{animation:flash 1.6s ease-out}
-  @keyframes flash{from{background:#1f2b1f}to{background:transparent}}
-  .muted{color:var(--dim)}
-  .tag{font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--line);
-       color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
-  .tag.new{color:var(--ok);border-color:#1d572b}
-  .tag.needs_review,.tag.needs_clarification{color:var(--warn);border-color:#5a4415}
-  .tag.duplicate,.tag.failed{color:var(--bad);border-color:#5c2321}
-  .act{border-bottom:1px solid #1d232c;padding:10px 0}
+  @media(max-width:1150px){main{grid-template-columns:1fr}}
+  .col{display:flex;flex-direction:column;gap:16px}
+
+  section{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+          overflow:hidden}
+  .hd{display:flex;justify-content:space-between;align-items:baseline;
+      padding:11px 16px;border-bottom:1px solid var(--line);background:var(--sunk)}
+  .hd h2{font-family:var(--display);font-size:14px;font-weight:600;margin:0;
+         letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  .hd .n{font-family:var(--mono);font-size:12px;color:var(--amber)}
+  .bd{padding:6px 16px 14px}
+
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th{text-align:left;font-family:var(--display);font-size:12px;font-weight:600;
+     letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+     padding:9px 8px 8px 0;border-bottom:1px solid var(--line)}
+  td{padding:11px 8px 11px 0;border-bottom:1px solid #1B242E;vertical-align:top}
+  tr:last-child td{border-bottom:0}
+  tr.fresh{animation:flash 2s ease-out}
+  @keyframes flash{from{background:#14301F}to{background:transparent}}
+  .co{font-weight:600}
+  .sub{color:var(--dim);font-size:12.5px;font-family:var(--mono)}
+  .muted{color:#4B5A68}
+
+  .tag{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:3px;
+       border:1px solid var(--line);color:var(--dim);text-transform:uppercase}
+  .tag.text{color:var(--blue);border-color:#22455F}
+  .tag.contact{color:var(--ok);border-color:#1F5637}
+  .tag.image{color:var(--amber);border-color:#5A4715}
+  .tag.audio{color:#C48BE0;border-color:#4A2F5C}
+  .tag.new,.tag.created,.tag.updated{color:var(--ok);border-color:#1F5637}
+  .tag.needs_review,.tag.needs_clarification{color:var(--warn);border-color:#5A4715}
+  .tag.duplicate,.tag.failed{color:var(--bad);border-color:#5C2626}
+  .tag.scheduled{color:var(--blue);border-color:#22455F}
+  .tag.awaiting_clarification{color:var(--warn);border-color:#5A4715}
+  .tag.sent{color:var(--dim)}
+
+  button{background:#1C2733;color:var(--ink);border:1px solid var(--line);
+         border-radius:4px;padding:5px 10px;font-size:12px;cursor:pointer;
+         font-family:var(--body)}
+  button:hover{border-color:#3E4E5E;background:#232F3D}
+  button:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+
+  /* totals */
+  .totals{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+          background:var(--line);border-top:1px solid var(--line)}
+  .tot{background:var(--panel);padding:13px 16px}
+  .tot b{display:block;font-family:var(--display);font-size:30px;font-weight:700;
+         color:var(--amber);line-height:1;font-variant-numeric:tabular-nums}
+  .tot span{font-family:var(--display);font-size:11px;color:var(--dim);
+            letter-spacing:.14em;text-transform:uppercase}
+
+  /* component split bar */
+  .split{padding:12px 16px 14px;border-top:1px solid var(--line)}
+  .split .lbl{font-family:var(--display);font-size:11px;letter-spacing:.14em;
+              text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  .bar{display:flex;height:12px;border-radius:2px;overflow:hidden;background:var(--sunk)}
+  .bar i{display:block}
+  .key{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;
+       font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .key i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+
+  /* activity feed */
+  .act{padding:11px 0;border-bottom:1px solid #1B242E}
   .act:last-child{border-bottom:0}
-  .act .top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
-  .money{color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
-  .spans{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
-  .span{font-size:10px;padding:2px 7px;border-radius:4px;background:#1b2230;
-        color:var(--dim);font-variant-numeric:tabular-nums}
-  .totals{display:flex;gap:22px;padding:10px 14px;border-top:1px solid var(--line);
-          font-variant-numeric:tabular-nums}
-  .totals b{display:block;font-size:19px;color:var(--accent);font-weight:600}
-  .totals span{font-size:10px;color:var(--dim);text-transform:uppercase;
-               letter-spacing:.1em}
-  button{background:#21262d;color:var(--ink);border:1px solid var(--line);
-         border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer}
-  button:hover{border-color:#3d4655}
-  .empty{color:var(--dim);padding:18px 6px;font-size:13px}
-  .fired{border:1px solid var(--accent);border-left:4px solid var(--accent);
-         background:#221b0d;padding:10px 12px;margin:0 0 10px;
-         animation:ring 1.8s ease-out}
-  .fired .hdr{color:var(--accent);font-size:10px;letter-spacing:.12em;
-              font-weight:600;margin-bottom:6px}
-  .fired .body{white-space:pre-wrap;font-size:13px;color:var(--ink)}
-  .fired .via{color:var(--dim);font-size:10px;margin-top:6px}
-  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(240,180,41,.55)}
-                  100%{box-shadow:0 0 0 16px rgba(240,180,41,0)}}
+  .act .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+  .act .msg{font-size:14px}
+  .money{font-family:var(--mono);color:var(--amber);font-variant-numeric:tabular-nums;
+         white-space:nowrap;font-size:12.5px}
+  .spans{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .sp{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:3px;
+      background:var(--sunk);border:1px solid var(--line);color:var(--dim)}
+
+  .fired{border:1px solid var(--amber);border-left:4px solid var(--amber);
+         background:#251C09;padding:12px 14px;margin:10px 0;border-radius:4px;
+         animation:ring 2.2s ease-out}
+  .fired .hdr{font-family:var(--display);color:var(--amber);font-size:12px;
+              letter-spacing:.15em;font-weight:700;margin-bottom:7px}
+  .fired .body{white-space:pre-wrap;font-size:14px}
+  .fired .via{color:var(--dim);font-family:var(--mono);font-size:10.5px;margin-top:7px}
+  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(240,169,59,.5)}
+                  100%{box-shadow:0 0 0 22px rgba(240,169,59,0)}}
+  @media (prefers-reduced-motion:reduce){
+    tr.fresh,.fired{animation:none}
+  }
+  .empty{color:var(--dim);padding:20px 0;font-size:14px}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Chat-to-Lead</h1>
-  <span class="pill" id="p-claude">claude …</span>
-  <span class="pill" id="p-teams">teams …</span>
-  <span class="pill" id="p-stt">stt …</span>
-  <span class="pill" id="p-store">store …</span>
+  <h1>Chat&#8209;to&#8209;<span>Lead</span></h1>
+  <div class="pills">
+    <span class="pill" id="p-claude">claude …</span>
+    <span class="pill" id="p-teams">teams …</span>
+    <span class="pill" id="p-stt">stt …</span>
+    <span class="pill" id="p-store">store …</span>
+  </div>
   <span class="pill" id="p-conn">connecting…</span>
 </header>
 
 <main>
-  <section>
-    <div class="hd">Leads &mdash; persisted records</div>
-    <div class="body">
-      <table>
-        <thead><tr>
-          <th>Company</th><th>Contact</th><th>Mobile</th><th>Email</th>
-          <th>Source</th><th>Status</th><th></th>
-        </tr></thead>
-        <tbody id="leads"></tbody>
-      </table>
-      <div class="empty" id="leads-empty">No leads yet. Message the bot in Teams.</div>
-    </div>
-  </section>
+  <div class="col">
+    <section>
+      <div class="hd"><h2>Leads &mdash; persisted records</h2><span class="n" id="n-leads">0</span></div>
+      <div class="bd">
+        <table>
+          <thead><tr><th>Company</th><th>Contact</th><th>Source</th><th>Status</th><th></th></tr></thead>
+          <tbody id="leads"></tbody>
+        </table>
+        <div class="empty" id="leads-empty">No leads yet &mdash; message the bot.</div>
+      </div>
+    </section>
 
-  <section>
-    <div class="hd">Solution economics &mdash; per activity</div>
-    <div class="body" id="acts">
-      <div class="empty">Waiting for activity…</div>
-    </div>
-    <div class="totals">
-      <div><b id="t-count">0</b><span>activities</span></div>
-      <div><b id="t-cost">$0.0000</b><span>total cost</span></div>
-      <div><b id="t-avg">0 ms</b><span>avg latency</span></div>
-    </div>
-  </section>
+    <section>
+      <div class="hd"><h2>Follow-ups</h2><span class="n" id="n-fu">0</span></div>
+      <div class="bd">
+        <table>
+          <thead><tr><th>Due</th><th>Instruction</th><th>Status</th></tr></thead>
+          <tbody id="fus"></tbody>
+        </table>
+        <div class="empty" id="fu-empty">None scheduled.</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section>
+      <div class="hd"><h2>Solution economics</h2><span class="n">per activity</span></div>
+      <div class="totals">
+        <div class="tot"><b id="t-count">0</b><span>activities</span></div>
+        <div class="tot"><b id="t-cost">$0.0000</b><span>total cost</span></div>
+        <div class="tot"><b id="t-avg">0<small style="font-size:15px"> ms</small></b><span>avg latency</span></div>
+      </div>
+      <div class="split">
+        <div class="lbl">Cost by component</div>
+        <div class="bar" id="bar"></div>
+        <div class="key" id="key"><span class="muted">no spend yet</span></div>
+      </div>
+      <div class="bd" id="acts"><div class="empty">Waiting for activity…</div></div>
+    </section>
+  </div>
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
+const esc = s => (s ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 let count = 0, cost = 0, latency = 0;
+const byComponent = {};
+const COLORS = {llm:'#5AA9E6', vision:'#F0A93B', stt:'#C48BE0', db:'#4ED08A', channel_api:'#8496A6'};
 
 async function health(){
   try{
     const h = await (await fetch('/api/health')).json();
-    const set = (el, text, live) => {
-      const n = $(el); n.textContent = text;
-      n.className = 'pill ' + (live ? 'live' : 'mock');
-    };
-    set('p-claude', 'claude: ' + h.claude, h.claude === 'live');
-    set('p-teams',  'teams: '  + h.teams,  h.teams === 'live');
-    set('p-stt',    'stt: '    + h.stt,    h.stt !== 'mock-stt');
-    set('p-store',  h.store, false);   // always amber: it is our own store
-  }catch(e){
-    $('p-conn').textContent = 'server unreachable';
-    $('p-conn').className = 'pill mock';
-  }
+    const set = (el, txt, live) => { const n=$(el); n.textContent=txt; n.className='pill '+(live?'live':'mock'); };
+    set('p-claude','claude: '+h.claude, h.claude==='live');
+    set('p-teams','teams: '+h.teams, h.teams==='live');
+    set('p-stt','stt: '+h.stt, h.stt!=='mock-stt');
+    set('p-store', h.store, false);
+  }catch(e){ $('p-conn').textContent='server unreachable'; $('p-conn').className='pill mock'; }
 }
-
-function esc(s){ return (s ?? '').toString().replace(/[<>&]/g, c =>
-  ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
 
 async function loadLeads(freshId){
   const rows = await (await fetch('/api/leads')).json();
-  $('leads-empty').style.display = rows.length ? 'none' : 'block';
-  $('leads').innerHTML = rows.map(l => `
-    <tr class="${l.id === freshId ? 'fresh' : ''}">
-      <td>${esc(l.company_name) || '<span class="muted">—</span>'}</td>
-      <td>${esc([l.first_name, l.last_name].filter(Boolean).join(' ')) || '<span class="muted">—</span>'}</td>
-      <td>${esc(l.mobile) || '<span class="muted">—</span>'}</td>
-      <td>${esc(l.email) || '<span class="muted">—</span>'}</td>
-      <td><span class="tag">${esc(l.source_kind)}</span></td>
+  $('n-leads').textContent = rows.length;
+  $('leads-empty').style.display = rows.length ? 'none':'block';
+  $('leads').innerHTML = rows.map(l => {
+    const name = esc([l.first_name,l.last_name].filter(Boolean).join(' '));
+    return `<tr class="${l.id===freshId?'fresh':''}">
+      <td><div class="co">${esc(l.company_name)||'<span class="muted">—</span>'}</div>
+          <div class="sub">${esc(l.email)||''}</div></td>
+      <td>${name||'<span class="muted">—</span>'}<div class="sub">${esc(l.mobile)||''}</div></td>
+      <td><span class="tag ${esc(l.source_kind)}">${esc(l.source_kind)}</span></td>
       <td><span class="tag ${esc(l.status)}">${esc(l.status)}</span></td>
-      <td><button onclick="del('${l.id}')">Delete</button></td>
-    </tr>`).join('');
+      <td><button onclick="del('${l.id}')">Delete</button></td></tr>`;
+  }).join('');
 }
 
-async function del(id){
-  await fetch('/api/leads/' + id, {method:'DELETE'});
-  loadLeads();
+async function loadFollowUps(){
+  const rows = await (await fetch('/api/follow-ups')).json();
+  $('n-fu').textContent = rows.length;
+  $('fu-empty').style.display = rows.length ? 'none':'block';
+  $('fus').innerHTML = rows.map(f => {
+    const due = f.due_at ? new Date(f.due_at).toLocaleString(undefined,
+        {weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+      : '<span class="muted">not set</span>';
+    return `<tr><td class="sub">${due}</td>
+      <td>${esc(f.instruction)||'<span class="muted">—</span>'}
+        ${f.clarification_question?`<div class="sub">asked: ${esc(f.clarification_question)}</div>`:''}</td>
+      <td><span class="tag ${esc(f.status)}">${esc(f.status).replace(/_/g,' ')}</span></td></tr>`;
+  }).join('');
+}
+
+async function del(id){ await fetch('/api/leads/'+id,{method:'DELETE'}); loadLeads(); loadFollowUps(); }
+
+function renderSplit(){
+  const total = Object.values(byComponent).reduce((a,b)=>a+b,0);
+  if(!total){ return; }
+  const parts = Object.entries(byComponent).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  $('bar').innerHTML = parts.map(([k,v]) =>
+    `<i style="width:${(v/total*100).toFixed(2)}%;background:${COLORS[k]||'#8496A6'}"></i>`).join('');
+  $('key').innerHTML = parts.map(([k,v]) =>
+    `<span><i style="background:${COLORS[k]||'#8496A6'}"></i>${esc(k)} $${v.toFixed(4)}</span>`).join('');
 }
 
 function addActivity(r){
-  const led = r.ledger || {entries:[], total_cost_usd:0, total_latency_ms:0};
+  const led = r.ledger || {entries:[],total_cost_usd:0,total_latency_ms:0};
   count++; cost += led.total_cost_usd; latency += led.total_latency_ms;
   $('t-count').textContent = count;
-  $('t-cost').textContent = '$' + cost.toFixed(4);
-  $('t-avg').textContent = Math.round(latency / count) + ' ms';
+  $('t-cost').textContent = '$'+cost.toFixed(4);
+  $('t-avg').innerHTML = Math.round(latency/count)+'<small style="font-size:15px"> ms</small>';
 
-  const spans = led.entries.map(e => `<span class="span">${esc(e.component)}
-      ${esc(e.service)} · ${e.latency_ms.toFixed(0)}ms
-      ${e.cost_usd ? '· $' + e.cost_usd.toFixed(4) : ''}</span>`).join('');
+  led.entries.forEach(e => { byComponent[e.component] = (byComponent[e.component]||0) + (e.cost_usd||0); });
+  renderSplit();
+
+  const spans = led.entries.map(e =>
+    `<span class="sp">${esc(e.component)} · ${esc(e.service)} · ${e.latency_ms.toFixed(0)}ms${
+      e.cost_usd ? ' · $'+e.cost_usd.toFixed(4) : ''}</span>`).join('');
 
   const el = document.createElement('div');
   el.className = 'act';
-  el.innerHTML = `
-    <div class="top">
-      <span><span class="tag ${esc(r.status)}">${esc(r.status)}</span>
-        ${esc(r.message).slice(0,90)}</span>
-      <span class="money">$${led.total_cost_usd.toFixed(4)} ·
-        ${led.total_latency_ms.toFixed(0)}ms</span>
-    </div>
-    <div class="spans">${spans}</div>`;
+  el.innerHTML = `<div class="top">
+      <span class="msg"><span class="tag ${esc(r.status)}">${esc(r.status).replace(/_/g,' ')}</span>
+        ${esc(r.message).slice(0,110)}</span>
+      <span class="money">$${led.total_cost_usd.toFixed(4)}<br>${led.total_latency_ms.toFixed(0)} ms</span>
+    </div><div class="spans">${spans}</div>`;
   const box = $('acts');
-  if (box.querySelector('.empty')) box.innerHTML = '';
+  if(box.querySelector('.empty')) box.innerHTML='';
+  box.prepend(el);
+}
+
+// A follow-up firing is the one event that must be impossible to miss -
+// it lands unprompted while the room is watching this screen.
+function followUpFired(msg){
+  const el = document.createElement('div');
+  el.className = 'fired';
+  const hdr = document.createElement('div');
+  hdr.className='hdr'; hdr.textContent = 'FOLLOW-UP FIRED · ' + (msg.company||'');
+  const body = document.createElement('div'); body.className='body'; body.textContent = msg.text||'';
+  const via = document.createElement('div'); via.className='via'; via.textContent = 'delivery: '+(msg.delivery||'');
+  el.append(hdr, body, via);
+  const box = $('acts');
+  if(box.querySelector('.empty')) box.innerHTML='';
   box.prepend(el);
 }
 
 const es = new EventSource('/api/stream');
-es.onopen  = () => { $('p-conn').textContent = 'live'; $('p-conn').className='pill live'; };
-es.onerror = () => { $('p-conn').textContent = 'reconnecting…'; $('p-conn').className='pill mock'; };
-// A follow-up firing is the one event that must be impossible to miss -
-// it happens while the room is looking at this screen, unprompted.
-function followUpFired(msg){
-  const el = document.createElement('div');
-  el.className = 'fired';
-  el.innerHTML = `<div class="hdr">FOLLOW-UP FIRED &middot; ${esc(msg.company || '')}</div>`;
-  const pre = document.createElement('div');
-  pre.className = 'body';
-  pre.textContent = msg.text || '';
-  const via = document.createElement('div');
-  via.className = 'via';
-  via.textContent = 'delivery: ' + (msg.delivery || '');
-  el.appendChild(pre); el.appendChild(via);
-  const box = $('acts');
-  if (box.querySelector('.empty')) box.innerHTML = '';
-  box.prepend(el);
-}
-
+es.onopen  = () => { $('p-conn').textContent='live'; $('p-conn').className='pill live'; };
+es.onerror = () => { $('p-conn').textContent='reconnecting…'; $('p-conn').className='pill mock'; };
 es.onmessage = ev => {
   const msg = JSON.parse(ev.data);
-  if (msg.type === 'activity'){
-    addActivity(msg.result);
-    loadLeads(msg.result.lead && msg.result.lead.id);
-  } else if (msg.type === 'follow_up_fired'){
-    followUpFired(msg);
-    loadLeads();
-  } else {
-    loadLeads();
-  }
+  if(msg.type === 'activity'){ addActivity(msg.result); loadLeads(msg.result.lead && msg.result.lead.id); loadFollowUps(); }
+  else if(msg.type === 'follow_up_fired'){ followUpFired(msg); loadFollowUps(); }
+  else { loadLeads(); loadFollowUps(); }
 };
 
-health(); loadLeads(); setInterval(health, 15000);
+health(); loadLeads(); loadFollowUps(); setInterval(health, 15000);
 </script>
 </body>
 </html>
