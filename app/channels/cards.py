@@ -96,9 +96,26 @@ def _lead_card(result: PipelineResult) -> dict:
             # action they reach for most.
             {"type": "Action.Submit", "title": "Add note",
              "data": {"action": "add_note", "lead_id": lead.id}},
-            # TODO(Vishal): Action.ShowCard with Input.Text fields for edit.
-            {"type": "Action.Submit", "title": "Edit",
-             "data": {"action": "update_lead", "lead_id": lead.id}},
+            # ShowCard, not a bare Submit. A Submit with no inputs carries no
+            # changes, and _handle_command then reports "Updated  for X"
+            # having changed nothing - a button that lies. Teams merges the
+            # input ids into the submitted data and update_lead treats any
+            # extra non-empty key as a change, so this needs no pipeline edit.
+            {"type": "Action.ShowCard", "title": "Edit",
+             "card": {
+                 "type": "AdaptiveCard",
+                 "version": "1.5",
+                 "body": [
+                     {"type": "Input.Text", "id": "mobile", "label": "Mobile",
+                      "value": lead.mobile or ""},
+                     {"type": "Input.Text", "id": "email", "label": "Email",
+                      "value": lead.email or ""},
+                 ],
+                 "actions": [
+                     {"type": "Action.Submit", "title": "Save",
+                      "data": {"action": "update_lead", "lead_id": lead.id}},
+                 ],
+             }},
             {"type": "Action.Submit", "title": "Delete",
              "data": {"action": "delete_lead", "lead_id": lead.id}},
         ],
@@ -106,19 +123,23 @@ def _lead_card(result: PipelineResult) -> dict:
 
 
 def _clarification_card(result: PipelineResult) -> dict:
-    """The mode-2 demo beat: company missing, so we ask instead of inventing."""
-    lead_id = result.lead.id if result.lead else ""
+    """The mode-2 demo beat: company missing, so we ask instead of inventing.
+
+    Deliberately a question with NO button. The pipeline parks the extraction
+    and returns lead=None until the company arrives, so any button here would
+    carry lead_id="" - and provide_company updates zero rows, then still
+    reports "Thanks - lead created", claiming a write that never happened. On
+    the one beat whose whole point is that we don't invent data, that is the
+    worst possible bug.
+
+    Answering by typing works correctly: _route -> _handle_clarification ->
+    _answer_company, which demo_check covers.
+    """
     return _base(
         body=[
             {"type": "TextBlock", "weight": "Bolder", "wrap": True,
              "text": result.clarification_question or result.message},
-            {"type": "Input.Text", "id": "company_name",
-             "placeholder": "Company name"},
             _cost_line(result),
-        ],
-        actions=[
-            {"type": "Action.Submit", "title": "Create lead",
-             "data": {"action": "provide_company", "lead_id": lead_id}},
         ],
     )
 
@@ -133,8 +154,22 @@ def _duplicate_card(result: PipelineResult) -> dict:
             _cost_line(result),
         ],
         actions=[
-            {"type": "Action.Submit", "title": "Update existing",
-             "data": {"action": "update_lead", "lead_id": result.duplicate_of}},
+            # Same reason as Edit above: a fieldless Submit changes nothing
+            # but still reports success.
+            {"type": "Action.ShowCard", "title": "Update existing",
+             "card": {
+                 "type": "AdaptiveCard",
+                 "version": "1.5",
+                 "body": [
+                     {"type": "Input.Text", "id": "mobile", "label": "Mobile"},
+                     {"type": "Input.Text", "id": "email", "label": "Email"},
+                 ],
+                 "actions": [
+                     {"type": "Action.Submit", "title": "Save",
+                      "data": {"action": "update_lead",
+                               "lead_id": result.duplicate_of}},
+                 ],
+             }},
         ],
     )
 

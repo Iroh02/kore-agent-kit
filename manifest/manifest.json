@@ -1,0 +1,55 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "ecdf66b0-0513-4f6a-862d-4e65abefb890",
+  "packageName": "com.intrakore.chattolead",
+  "developer": {
+    "name": "Kore Agent Kit",
+    "websiteUrl": "https://github.com/Iroh02/kore-agent-kit",
+    "privacyUrl": "https://github.com/Iroh02/kore-agent-kit",
+    "termsOfUseUrl": "https://github.com/Iroh02/kore-agent-kit"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "name": {
+    "short": "Chat to Lead",
+    "full": "Chat to Lead - capture and follow up"
+  },
+  "description": {
+    "short": "Turn chat messages into structured leads and scheduled follow-ups.",
+    "full": "Send lead details as text, a shared contact or a photo of a business card. Chat to Lead extracts the details, confirms what it captured, asks for anything missing rather than guessing, stores the lead, and schedules your follow-up."
+  },
+  "accentColor": "#3F51B5",
+  "bots": [
+    {
+      "botId": "ecdf66b0-0513-4f6a-862d-4e65abefb890",
+      "scopes": ["personal"],
+      "isNotificationOnly": false,
+      "supportsFiles": true,
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            {
+              "title": "Add a lead",
+              "description": "Send company, name, mobile and email as text"
+            },
+            {
+              "title": "Share a contact",
+              "description": "Attach a .vcf contact card"
+            },
+            {
+              "title": "Business card",
+              "description": "Send a photo of a business card"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["*.devtunnels.ms", "token.botframework.com"]
+}

@@ -202,6 +202,15 @@ async def messages(request: Request):
     activity = await request.json()
     _capture_activity(activity)
 
+    # Bot Framework delivers conversationUpdate (chat opened) and typing here
+    # too. to_inbound_event has no type branch, so those arrive as an empty
+    # TEXT event, burn a Claude call on "", come back with nothing extracted,
+    # and park a pending clarification - which then eats the next real message
+    # as its answer. Capture them above (they are useful fixtures), act on
+    # none of them.
+    if activity.get("type") != "message":
+        return Response(status_code=200)
+
     from app.channels.teams import to_inbound_event  # local: avoid import cycle
 
     event = await to_inbound_event(activity)
