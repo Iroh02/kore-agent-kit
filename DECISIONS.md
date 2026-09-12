@@ -240,3 +240,47 @@ comes back is additive optional fields on the same model.
 
 **16:15.** Record the screen capture, then demo-breaking fixes only. Per
 `WORKING-AGREEMENT.md`, that recording is the insurance.
+
+---
+
+## D16 — Model vendor, measured against the alternative
+
+**Decision:** stay on Claude for today. Sonnet 5 at low effort for text,
+Opus 5 at default effort for business-card vision, Deepgram Nova-3 for
+speech-to-text. All three measured, all three tested, 17/17.
+
+**Verified prices (2026-09-12):**
+
+| | Input / MTok | Output / MTok | Audio |
+|---|---|---|---|
+| Claude Sonnet 5 | $2.00 | $10.00 | not supported |
+| Claude Opus 5 | $5.00 | $25.00 | not supported |
+| Gemini 2.5 Flash | $0.30 | $2.50 | $1.00 / MTok native |
+| Deepgram Nova-3 | — | — | $0.0043 / min |
+
+**Measured per activity (ours):** contact $0.000, text ~$0.002, card ~$0.011,
+voice ~$0.0034 (stt $0.0015 + llm $0.0019).
+
+**The honest alternative:** Gemini 2.5 Flash is roughly 4–6× cheaper per
+text lead on our token counts, and takes audio natively — a voice note
+could go straight to extraction in one call, removing Deepgram as a vendor.
+That is a real simplification, not a marginal one.
+
+**Why we did not switch:** timing and risk, not quality. Switching at 15:30
+means an untested path on all three modes, no eval set to prove accuracy
+held, and a rewrite of the ledger's usage mapping — 90 minutes before
+freeze. The right sequence is: build the eval set, then run Flash against
+it, then decide. That is the first experiment for week two.
+
+**Why a free tier is the wrong answer for this brief:** the brief scores
+cost per activity. A free tier makes that "zero", which cannot be put on a
+slide or extrapolated. Paid per-token pricing is what makes the
+sensitivity table possible.
+
+**The structural point that makes this low-stakes:** the model lives in two
+files, `extract.py` and `transcribe.py`, behind the pipeline. Swapping it is
+a file change, not an architecture change.
+
+**For a Microsoft-shop COO:** Claude is available on Microsoft Foundry at the
+same per-token prices, billed through the Marketplace. Same model, same
+code, inside their Azure tenant.
