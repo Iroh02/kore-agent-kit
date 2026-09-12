@@ -1,4 +1,4 @@
-# HANDOFF — state of the build as at 14:20, 12 Sep 2026
+# HANDOFF — state of the build as at 15:15, 12 Sep 2026
 
 Read this first in a fresh session. It is the complete state. `DECISIONS.md`
 has the *why* for every choice; this file has the *what is true right now*.
@@ -25,7 +25,8 @@ dashboard on the projector.
 | Voice note → transcript → notes/lead | **real Deepgram**, `stt $0.0015 + llm $0.002`; also works sent cold |
 | Meeting notes: summary, key points, action items, **original retained** | `attach_note`, via "Add note" button |
 | Follow-up tri-state (resolved / ambiguous → asks / none) | `followup.py`; spoken numbers ("two days") work |
-| Both clarification loops (company, follow-up date) answerable by typing | `pending_clarifications`; expire 10 min; 8-word guard |
+| Both clarification loops (company, follow-up date) answerable by typing | `pending_clarifications`; expire 10 min; new-message guard (`@`, 2+ commas, >60 chars, >8 words re-routes; emoji / `?` re-asks) |
+| `cancel` / `never mind` / `stop` escapes any pending state and says what was dropped | `_cancel_pending`; $0, no model call |
 | Duplicate detection, reports which field matched | email then mobile, last-9 digits |
 | Idempotency on `activity_id` | replay → no second lead |
 | CRUD: create / read / update / delete, cascade on delete | REST + card buttons |
@@ -34,7 +35,7 @@ dashboard on the projector.
 | Live dashboard (SSE) with confidence column, follow-ups, component split | `ui/dashboard.html` |
 | Adaptive Cards with Add note / Edit / Delete + cost line, rendering in Web Chat | Vishal |
 | Typing indicator, concurrent with the pipeline | Vishal |
-| `tests/demo_check.py` | **17/17** |
+| `tests/demo_check.py` | **25/25** (8 pending-state guard checks added 15:10) |
 | `tests/evals.py` | **70/70**, five fields, 14 labelled cases, $0.07/run |
 
 ## Measured numbers for the slides
@@ -77,13 +78,17 @@ first week-two experiment, against the eval set. **Intrakore runs on AWS
 8. Bare voice note (no Add-note tap) failed outright
 9. `.env` pinned `EXTRACTION_MODEL=opus` and silently overrode the tuning
 10. Raw Web Chat captures contained live JWTs — repo is public (Vishal)
+11. Open "which company?" accepted a whole lead line with an email in it as
+    the company name, under the 8-word guard (Vishal reproduced live)
+12. No way out of a pending state — a mistaken "Add note" tap or an unwanted
+    question stuck until the 10-minute expiry
 
 ## How to run
 
 ```
 .venv\Scripts\python -m uvicorn app.api:app --port 8000     # server
 http://localhost:8000                                        # dashboard
-.venv\Scripts\python -m tests.demo_check                     # 17/17
+.venv\Scripts\python -m tests.demo_check                     # 25/25
 .venv\Scripts\python -m tests.evals                          # 70/70
 .venv\Scripts\python tools\send.py demo                      # run of show, one beat per keypress
 .venv\Scripts\python tools\send.py reset                     # wipe leads before a rehearsal
@@ -102,6 +107,7 @@ venv + `pip install -e .` works. Vishal uses `uv sync` — both fine.
 - **`send.py reset` then reload the dashboard** before each rehearsal and
   before 17:00 — the dashboard counters are client-side.
 - An unanswered bot question stays live 10 min. Tapping "Add note" clears it.
+  Typing `cancel` or `never mind` clears any pending state and says so.
 - Web Chat: **file and `.vcf` attachments are unvalidated** (need a real
   Teams client). Mode 2 demos via `send.py vcf` landing on the dashboard —
   say so plainly.
@@ -141,7 +147,7 @@ two-file vendor swap; null-not-guess; PII needs DPA + redaction in prod.
 
 - **Do not deploy.** Tunnel is a public URL; Web Chat is a real channel;
   Bedrock is the production answer on a slide.
-- **Do not switch models.** Measured, tested, 17/17. Gemini is a week-two
+- **Do not switch models.** Measured, tested, 25/25. Gemini is a week-two
   experiment.
 - **No new features.** Every bug today came from running the demo, not
   adding to it.
@@ -152,6 +158,10 @@ two-file vendor swap; null-not-guess; PII needs DPA + redaction in prod.
 - Adversarial card set hard enough to lower confidence
 - Gemini comparison against the eval set
 - Inbound JWT validation (named on risks slide)
+- Vishal's latency note (`for-nandita-latency-and-bugs.md`, 15:05): the text
+  path is 99.9% Claude output tokens at ~50–70 tok/s; `source_quote` is
+  ~15–25 of the ~147. Dropping it is a `schemas.py` contract change plus an
+  eval rerun — week two, not before the demo.
 
 ## Repo / people
 

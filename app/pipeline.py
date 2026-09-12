@@ -88,6 +88,13 @@ async def _route(event: InboundEvent, store: Store, led: Ledger) -> PipelineResu
     # lead. Checked before the pending-note branch because an unanswered
     # question is the most recent thing that happened in the conversation.
     if event.kind is InputKind.TEXT:
+        # "cancel" / "never mind" is the way out of any pending state. Without
+        # it a salesperson who tapped "Add note" by mistake, or who was asked
+        # "which company?" about a lead they no longer want, is stuck until
+        # the question expires. Checked first so it can never be swallowed
+        # as an answer.
+        if _is_cancel(event.text):
+            return _cancel_pending(event, store, led)
         with led.span(Component.DB, "sqlite", "get_pending_clarification"):
             pending = store.get_pending_clarification(
                 event.user_id, event.conversation_id
@@ -135,6 +142,68 @@ def _expired(pending: dict) -> bool:
     return (_now() - created).total_seconds() > CLARIFY_TTL_S
 
 
+# The escape hatch. A whole message that is only one of these words.
+_CANCEL = re.compile(
+    r"^\s*(?:cancel|never\s*mind|nevermind|stop|forget\s+it|skip(?:\s+it)?|"
+    r"no\s+thanks|drop\s+it)\s*[.!]*\s*$",
+    re.I,
+)
+
+
+def _is_cancel(text: str | None) -> bool:
+    return bool(text) and bool(_CANCEL.match(text))
+
+
+def _cancel_pending(event: InboundEvent, store: Store, led: Ledger) -> PipelineResult:
+    """Clear whatever we were waiting on and say what was dropped."""
+    with led.span(Component.DB, "sqlite", "get_pending_clarification"):
+        pending = store.get_pending_clarification(event.user_id, event.conversation_id)
+    with led.span(Component.DB, "sqlite", "get_pending_note"):
+        note_lead = store.get_pending_note(event.user_id, event.conversation_id)
+
+    dropped: list[str] = []
+    if pending:
+        with led.span(Component.DB, "sqlite", "clear_pending_clarification"):
+            store.clear_pending_clarification(event.user_id, event.conversation_id)
+        if pending["kind"] == "followup_date":
+            dropped.append("the follow-up question - it stays unscheduled, set it from the card any time")
+        else:
+            dropped.append("that question - nothing was created")
+    if note_lead:
+        with led.span(Component.DB, "sqlite", "clear_pending_note"):
+            store.clear_pending_note(event.user_id, event.conversation_id)
+        dropped.append("the note - nothing was added to the lead")
+
+    if not dropped:
+        message = "Nothing pending. Send me the next lead whenever you're ready."
+    else:
+        message = "Okay, dropped " + " and ".join(dropped) + "."
+    return PipelineResult(
+        trace_id=led.trace_id, status=ResultStatus.READ, message=message,
+        ledger=led.finish(),
+    )
+
+
+def _looks_like_new_message(answer: str) -> bool:
+    """Not an answer to "which company?" but the next thing they wanted to say.
+
+    A company name has no email address in it, no run of commas, and is
+    short. Anything else is a fresh lead line that arrived while a question
+    was still open - route it normally instead of filing it as a company.
+    """
+    return (
+        "@" in answer
+        or answer.count(",") >= 2
+        or len(answer) > 60
+        or len(answer.split()) > MAX_COMPANY_ANSWER_WORDS
+    )
+
+
+def _not_an_answer(company: str) -> bool:
+    """An emoji, a bare "?", or a question back - re-ask rather than file it."""
+    return not re.search(r"[A-Za-z0-9]", company) or company.rstrip().endswith("?")
+
+
 # Leading filler people type when answering "which company?". Stripped
 # deterministically rather than with a model call: it is predictable, free,
 # and the confirmation card shows what was captured so a wrong read is one
@@ -172,16 +241,19 @@ def _answer_company(
     event: InboundEvent, pending: dict, answer: str, store: Store, led: Ledger
 ) -> PipelineResult:
     """The missing company arrived. Complete the lead we refused to write."""
-    company = _COMPANY_FILLER.sub("", answer).strip(" .,\n\t")
-    if not company:
-        return _clarify(led, pending["question"], missing=["company_name"])
-    if len(company.split()) > MAX_COMPANY_ANSWER_WORDS:
+    if _looks_like_new_message(answer):
         # Not an answer - a new message that arrived while a question was
-        # still open. Found live: meeting notes became a 30-word "company".
+        # still open. Found live: meeting notes became a 30-word "company",
+        # and a whole lead line with an email in it became a one-word one.
         # Drop the question and route this message normally.
         with led.span(Component.DB, "sqlite", "clear_pending_clarification"):
             store.clear_pending_clarification(event.user_id, event.conversation_id)
         return _handle_capture(event, store, led)
+    company = _COMPANY_FILLER.sub("", answer).strip(" .,\n\t")
+    if not company or _not_an_answer(company):
+        # An emoji or a question back is not a company name. Ask again and
+        # keep the question open; "cancel" is the way out.
+        return _clarify(led, pending["question"], missing=["company_name"])
 
     # Rehydrate the extraction we held back rather than re-running the model.
     extraction = LeadExtraction(**pending["payload"])

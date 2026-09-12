@@ -156,6 +156,35 @@ async def main():
         lambda r: (r.follow_up is not None and r.follow_up.due_at is not None,
                    f"due {r.follow_up.due_at:%a %d %b %H:%M}" if r.follow_up else "not set"))
 
+    print("\n--- 4b. PENDING-STATE GUARDS (found by running the demo) ---")
+    vcf_hana = VCARD_NO_ORG.replace(b"Haddad;Layla", b"Saleh;Hana").replace(
+        b"layla.h@example.ae", b"hana.s@example.ae").replace(b"55 900 1234", b"55 900 5678")
+    await check("Contact with NO company -> asks (again)", ev("p1", InputKind.CONTACT,
+        blob=vcf_hana), store, "needs_clarification", lambda r: (True, ""))
+    await check('Answer is an emoji -> re-asks, question kept', ev("p2", InputKind.TEXT,
+        text="🙂"), store, "needs_clarification",
+        lambda r: (store.get_pending_clarification(U, C) is not None, "pending kept"))
+    await check("Answer is a whole new lead -> re-routed, not filed as company",
+        ev("p3", InputKind.TEXT,
+           text="New lead - Karim Nasser at Nova Build, karim@novabuild.ae, 971 50 111 2222"),
+        store, "created",
+        lambda r: (r.lead.company_name == "Nova Build" and store.get_pending_clarification(U, C) is None,
+                   f"company={r.lead.company_name}, pending cleared"))
+    await check("Contact with NO company -> asks (third)", ev("p4", InputKind.CONTACT,
+        blob=vcf_hana), store, "needs_clarification", lambda r: (True, ""))
+    await check('"never mind" -> question dropped, nothing created', ev("p5", InputKind.TEXT,
+        text="never mind"), store, "read",
+        lambda r: (store.get_pending_clarification(U, C) is None
+                   and not [l for l in store.list_leads() if l.email == "hana.s@example.ae"],
+                   "pending cleared, no lead"))
+    await check('Add note then "cancel" -> note dropped', ev("p6", InputKind.COMMAND,
+        cmd={"action": "add_note", "lead_id": lead.id}), store, "read", lambda r: (True, ""))
+    await check('  ...cancel', ev("p7", InputKind.TEXT, text="cancel"), store, "read",
+        lambda r: (store.get_pending_note(U, C) is None, "pending note cleared"))
+    await check('"cancel" with nothing pending -> no model call', ev("p8", InputKind.TEXT,
+        text="cancel"), store, "read",
+        lambda r: (r.ledger.total_cost_usd == 0.0, f"cost=${r.ledger.total_cost_usd:.6f}"))
+
     print("\n--- 5. CRUD ---")
     target = [l for l in store.list_leads() if l.company_name == "Arc Glazing"][0]
     await check("UPDATE lead from a card button", ev("t15", InputKind.COMMAND,
