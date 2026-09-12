@@ -34,7 +34,9 @@ _client: anthropic.Anthropic | None = None
 def client() -> anthropic.Anthropic:
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        # `or None` lets the SDK resolve from env or an `ant auth login`
+        # profile; an explicit empty string would block that resolution.
+        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key or None)
     return _client
 
 
