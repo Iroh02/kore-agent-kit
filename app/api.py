@@ -345,7 +345,15 @@ def health():
         "ok": True,
         "claude": "live" if settings.claude_enabled else "MOCKED (no API key)",
         "teams": "live" if settings.teams_enabled else "MOCKED (no bot creds)",
-        "stt": settings.stt_provider,
+        # Report what actually runs, not what is configured. Reporting the
+        # configured vendor name made the dashboard paint a green "live" pill
+        # for Deepgram while transcribe.py was returning a canned transcript,
+        # which is exactly the hidden gap CLAUDE.md forbids.
+        "stt": (
+            settings.stt_provider
+            if settings.stt_api_key
+            else f"MOCKED (canned transcript; {settings.stt_provider} not keyed)"
+        ),
         "store": "sqlite (our own datastore, not Intrakore CRM)",
         "model": settings.extraction_model,
         "leads": len(store.list_leads(limit=1000)),

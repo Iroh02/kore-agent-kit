@@ -118,19 +118,47 @@ async def fetch_attachment(att: Attachment) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-async def to_inbound_event(activity: dict) -> InboundEvent:
-    """Normalize a Bot Framework Activity.
+AUDIO_SUFFIXES = (".m4a", ".mp3", ".wav", ".ogg", ".mp4", ".aac", ".webm")
 
-    TODO(Vishal): finish this against the REAL fixtures in fixtures/ rather
-    than against this guess. Capture one of each first - text, inline image,
-    file, .vcf, card button - then make this match what actually arrives.
+
+def _classify(name: str, content_type: str) -> InputKind | None:
+    """What KIND of input an attachment represents, by type then by suffix."""
+    lowered = (name or "").lower()
+    if content_type.startswith("image/"):
+        return InputKind.IMAGE
+    if content_type.startswith("audio/") or lowered.endswith(AUDIO_SUFFIXES):
+        return InputKind.AUDIO
+    if content_type in ("text/vcard", "text/x-vcard") or lowered.endswith(".vcf"):
+        return InputKind.CONTACT
+    return None
+
+
+async def to_inbound_event(activity: dict) -> InboundEvent:
+    """Normalize a Bot Framework Activity. Written against the real payloads
+    in fixtures/webchat/, not against a guess at the shape.
+
+    Attachments arrive two ways and BOTH are handled:
+
+      * Teams files and voice notes -> FILE_DOWNLOAD_INFO, whose downloadUrl
+        is pre-authenticated, so a plain GET works.
+      * anything uploaded through a web client (and Teams inline images) ->
+        a contentUrl that needs the bot's bearer token.
+
+    Everything that is not a card button is attached and classified. An
+    earlier version matched only FILE_DOWNLOAD_INFO and image/*, and dropped
+    the rest on an `else: continue` - which was worse than it sounds: a
+    dropped attachment left kind=TEXT with empty text, so the pipeline ran
+    lead extraction on "", got nothing back, and parked a clarification that
+    then swallowed the user's NEXT message as its answer. Same failure shape
+    as running the pipeline on conversationUpdate. Classify, never drop.
     """
     raw_attachments = activity.get("attachments") or []
     attachments: list[Attachment] = []
-    kind = InputKind.TEXT
+    kinds: list[InputKind] = []
 
     for raw in raw_attachments:
-        content_type = raw.get("contentType", "")
+        content_type = raw.get("contentType", "") or ""
+
         if content_type == FILE_DOWNLOAD_INFO:
             info = raw.get("content") or {}
             name = raw.get("name", "file")
@@ -140,21 +168,21 @@ async def to_inbound_event(activity: dict) -> InboundEvent:
                 download_url=info.get("downloadUrl"),
                 requires_auth=False,  # pre-authenticated
             )
-            lowered = name.lower()
-            if lowered.endswith(".vcf"):
-                kind = InputKind.CONTACT
-            elif lowered.endswith((".m4a", ".mp3", ".wav", ".ogg", ".mp4")):
-                kind = InputKind.AUDIO
-        elif content_type.startswith("image/"):
-            att = Attachment(
-                name=raw.get("name", "image"),
-                content_type=content_type,
-                download_url=raw.get("contentUrl"),
-                requires_auth=True,  # inline images need the bot token
-            )
-            kind = InputKind.IMAGE
         else:
-            continue
+            url = raw.get("contentUrl")
+            if not url:
+                # Cards and other inline content carry no bytes to fetch.
+                continue
+            att = Attachment(
+                name=raw.get("name", "attachment"),
+                content_type=content_type or "application/octet-stream",
+                download_url=url,
+                requires_auth=True,  # web-client uploads need the bot token
+            )
+
+        found = _classify(att.name, att.content_type)
+        if found:
+            kinds.append(found)
 
         try:
             att.data = await fetch_attachment(att)
@@ -163,6 +191,13 @@ async def to_inbound_event(activity: dict) -> InboundEvent:
             # rather than a crash.
             pass
         attachments.append(att)
+
+    # Most specific wins, so a caption plus a card photo is still an IMAGE.
+    kind = InputKind.TEXT
+    for candidate in (InputKind.CONTACT, InputKind.AUDIO, InputKind.IMAGE):
+        if candidate in kinds:
+            kind = candidate
+            break
 
     value = activity.get("value")
     if value:
