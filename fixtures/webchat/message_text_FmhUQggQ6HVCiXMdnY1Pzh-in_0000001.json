@@ -1,0 +1,28 @@
+{
+  "type": "message",
+  "id": "FmhUQggQ6HVCiXMdnY1Pzh-in|0000001",
+  "timestamp": "2026-09-12T08:49:39.3269326Z",
+  "localTimestamp": "2026-09-12T08:49:38.983+00:00",
+  "localTimezone": "Asia/Dubai",
+  "serviceUrl": "https://webchat.botframework.com/",
+  "channelId": "webchat",
+  "from": {
+    "id": "0eb934e4-c067-49e9-ae3a-007983f903e8",
+    "name": ""
+  },
+  "conversation": {
+    "id": "FmhUQggQ6HVCiXMdnY1Pzh-in"
+  },
+  "recipient": {
+    "id": "kore-agent-kit-bot@<REDACTED_BOT_ID>",
+    "name": "kore-agent-kit-bot"
+  },
+  "textFormat": "plain",
+  "locale": "en-IN",
+  "text": "Lead: Priya Raman, Skyline Fitout, priya@example.invalid, +971500000000",
+  "attachments": [],
+  "channelData": {
+    "attachmentSizes": [],
+    "clientActivityID": "fnjs34d4uhl"
+  }
+}

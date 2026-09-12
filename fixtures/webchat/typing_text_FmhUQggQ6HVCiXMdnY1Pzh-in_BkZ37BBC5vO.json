@@ -1,0 +1,32 @@
+{
+  "type": "typing",
+  "id": "FmhUQggQ6HVCiXMdnY1Pzh-in|BkZ37BBC5vO",
+  "timestamp": "2026-09-12T08:49:27.4235017Z",
+  "localTimestamp": "2026-09-12T08:49:26.978+00:00",
+  "localTimezone": "Asia/Dubai",
+  "serviceUrl": "https://webchat.botframework.com/",
+  "channelId": "webchat",
+  "from": {
+    "id": "0eb934e4-c067-49e9-ae3a-007983f903e8",
+    "name": ""
+  },
+  "conversation": {
+    "id": "FmhUQggQ6HVCiXMdnY1Pzh-in"
+  },
+  "recipient": {
+    "id": "kore-agent-kit-bot@<REDACTED_BOT_ID>",
+    "name": "kore-agent-kit-bot"
+  },
+  "locale": "en-IN",
+  "entities": [
+    {
+      "type": "ClientCapabilities",
+      "requiresBotState": true,
+      "supportsListening": true,
+      "supportsTts": true
+    }
+  ],
+  "channelData": {
+    "clientActivityID": "pvbqn6gj93p"
+  }
+}

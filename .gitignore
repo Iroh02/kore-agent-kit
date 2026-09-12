@@ -8,3 +8,7 @@ kore.db
 kore.db-journal
 *.sqlite
 demo_check.db
+
+# Raw Activity captures carry live JWTs and an Azure key - never commit.
+# Run fixtures/sanitize.py and commit fixtures/webchat/ instead.
+fixtures/raw/

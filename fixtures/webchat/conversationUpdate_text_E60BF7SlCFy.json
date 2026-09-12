@@ -1,0 +1,26 @@
+{
+  "type": "conversationUpdate",
+  "id": "E60BF7SlCFy",
+  "timestamp": "2026-09-12T08:49:23.8761708Z",
+  "serviceUrl": "https://webchat.botframework.com/",
+  "channelId": "webchat",
+  "from": {
+    "id": "0eb934e4-c067-49e9-ae3a-007983f903e8"
+  },
+  "conversation": {
+    "id": "FmhUQggQ6HVCiXMdnY1Pzh-in"
+  },
+  "recipient": {
+    "id": "kore-agent-kit-bot@<REDACTED_BOT_ID>",
+    "name": "kore-agent-kit-bot"
+  },
+  "membersAdded": [
+    {
+      "id": "kore-agent-kit-bot@<REDACTED_BOT_ID>",
+      "name": "kore-agent-kit-bot"
+    },
+    {
+      "id": "0eb934e4-c067-49e9-ae3a-007983f903e8"
+    }
+  ]
+}

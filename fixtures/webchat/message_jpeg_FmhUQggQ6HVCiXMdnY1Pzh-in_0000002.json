@@ -1,0 +1,36 @@
+{
+  "type": "message",
+  "id": "FmhUQggQ6HVCiXMdnY1Pzh-in|0000002",
+  "timestamp": "2026-09-12T08:49:51.1206757Z",
+  "localTimestamp": "2026-09-12T08:49:50.426+00:00",
+  "localTimezone": "Asia/Dubai",
+  "serviceUrl": "https://webchat.botframework.com/",
+  "channelId": "webchat",
+  "from": {
+    "id": "0eb934e4-c067-49e9-ae3a-007983f903e8",
+    "name": ""
+  },
+  "conversation": {
+    "id": "FmhUQggQ6HVCiXMdnY1Pzh-in"
+  },
+  "recipient": {
+    "id": "kore-agent-kit-bot@<REDACTED_BOT_ID>",
+    "name": "kore-agent-kit-bot"
+  },
+  "textFormat": "plain",
+  "locale": "en-IN",
+  "attachments": [
+    {
+      "contentType": "image/jpeg",
+      "contentUrl": "https://webchat.botframework.com/attachments/FmhUQggQ6HVCiXMdnY1Pzh-in/0000002/0/Image25-08-26at1.08AM.jpg?t=%3CREDACTED_JWT%3E",
+      "name": "Image 25-08-26 at 1.08 AM.jpg",
+      "thumbnailUrl": "<REDACTED_INLINE_IMAGE_DATA>"
+    }
+  ],
+  "channelData": {
+    "attachmentSizes": [
+      267163
+    ],
+    "clientActivityID": "ulhe8wnj3wn"
+  }
+}
