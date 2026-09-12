@@ -1,4 +1,4 @@
-# HANDOFF — state of the build as at 15:15, 12 Sep 2026
+# HANDOFF — state of the build as at 15:55, 12 Sep 2026
 
 Read this first in a fresh session. It is the complete state. `DECISIONS.md`
 has the *why* for every choice; this file has the *what is true right now*.
@@ -82,6 +82,19 @@ first week-two experiment, against the eval set. **Intrakore runs on AWS
     the company name, under the 8-word guard (Vishal reproduced live)
 12. No way out of a pending state — a mistaken "Add note" tap or an unwanted
     question stuck until the 10-minute expiry
+13. Anthropic client had SDK default timeouts (600 s × 3): a hung connection
+    froze the single-worker process ~30 min. Now 25 s × 2 (~51 s worst case)
+14. Card Edit saved with blank fields replied "Updated  for X" having written
+    nothing; a lone space wiped a stored mobile and its dedupe key
+15. Answering a date question after the lead was deleted said "follow-up set"
+    for a row that no longer existed
+16. A `.vcf` whose download failed parsed as an all-None lead at confidence
+    1.0 and the bot said "I've got this contact"
+17. A photo or `.vcf` arriving while a question / Add-note was open left it
+    armed, so the next typed sentence became that lead's company name
+18. Follow-up times were UTC: "in 2 minutes" printed a clock 4 h off the
+    wall, and the dashboard (browser-local) disagreed with the card. Now
+    parsed in Asia/Dubai (`followup.LOCAL_TZ`), stored UTC, shown local
 
 ## How to run
 
@@ -115,7 +128,12 @@ venv + `pip install -e .` works. Vishal uses `uv sync` — both fine.
   table. Still not in the total on the Teams path: attachment download
   (happens before the ledger starts) — Vishal's column.
 - An unanswered bot question stays live 10 min. Tapping "Add note" clears it.
-  Typing `cancel` or `never mind` clears any pending state and says so.
+  Typing `cancel` or `never mind` clears any pending state and says so. Any
+  photo / `.vcf` that isn't claimed as an answer also clears it (15:50).
+- **A follow-up typed in the same message as a new lead is ignored.** Only
+  `attach_note` parses follow-ups. Beat 6: tap "Add note" first, then type.
+- `demo_check` prints `due … 05:00` — that is UTC storage; the bot's
+  message says 09:00 local. Both correct.
 - Web Chat: **file and `.vcf` attachments are unvalidated** (need a real
   Teams client). Mode 2 demos via `send.py vcf` landing on the dashboard —
   say so plainly.
@@ -166,6 +184,12 @@ two-file vendor swap; null-not-guess; PII needs DPA + redaction in prod.
 - Adversarial card set hard enough to lower confidence
 - Gemini comparison against the eval set
 - Inbound JWT validation (named on risks slide)
+- From the 15:30 edge-case audit (`handover-nandita-edgecases.md`), NOT done:
+  invalid / past ISO dates in `followup.py` crash to the generic error or
+  schedule in the past (only reachable by typing `2026-09-31`); "I don't
+  know" filed as a company name; two contacts in one message drops the
+  second silently; `_persist_lead` ignores a follow-up in a one-message
+  lead — so **beat 6 must be "tap Add note, then type"**.
 - Vishal's latency note (`for-nandita-latency-and-bugs.md`, 15:05): the text
   path is 99.9% Claude output tokens at ~50–70 tok/s; `source_quote` is
   ~15–25 of the ~147. Dropping it is a `schemas.py` contract change plus an

@@ -36,7 +36,16 @@ def client() -> anthropic.Anthropic:
     if _client is None:
         # `or None` lets the SDK resolve from env or an `ant auth login`
         # profile; an explicit empty string would block that resolution.
-        _client = anthropic.Anthropic(api_key=settings.anthropic_api_key or None)
+        # SDK defaults are read=600s x 3 attempts: a connection that opens
+        # and then hangs freezes this single-worker process for ~30 min,
+        # dashboard and scheduler included. 25s x 2 attempts bounds it at
+        # ~51s, after which the APIError path below asks a question instead.
+        # transcribe.py already bounds its httpx call at 60s.
+        _client = anthropic.Anthropic(
+            api_key=settings.anthropic_api_key or None,
+            timeout=25.0,
+            max_retries=1,
+        )
     return _client
 
 

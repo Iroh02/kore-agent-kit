@@ -121,6 +121,15 @@ async def _route(event: InboundEvent, store: Store, led: Ledger) -> PipelineResu
         if pending_lead_id:
             return _handle_note(event, pending_lead_id, store, led)
 
+    # Nothing above claimed this message, so any parked question or "Add note"
+    # scope is stale. The branches above only consume pendings for TEXT (and
+    # AUDIO for notes); a photo or .vcf sailed past both and left the flag
+    # armed, so the NEXT sentence typed became that lead's company name.
+    # No-op on the normal path; card buttons returned at the top.
+    with led.span(Component.DB, "sqlite", "clear_stale_pending"):
+        store.clear_pending_clarification(event.user_id, event.conversation_id)
+        store.clear_pending_note(event.user_id, event.conversation_id)
+
     if event.kind in (InputKind.TEXT, InputKind.IMAGE, InputKind.CONTACT, InputKind.AUDIO):
         return _handle_capture(event, store, led)
     return _fail(led, "I don't know how to handle that kind of message yet.")
@@ -283,9 +292,15 @@ def _answer_followup_date(
                 "clarification_question": None,
             })
             store.clear_pending_clarification(event.user_id, event.conversation_id)
+        if not fu:
+            # The lead (and its follow-up) was deleted while the question was
+            # open. Nothing was written, so do not say it was.
+            return _fail(led, "That follow-up is gone - the lead was deleted, "
+                              "so I haven't scheduled anything.")
         return PipelineResult(
             trace_id=led.trace_id, status=ResultStatus.UPDATED,
-            message=f"Got it - follow-up set for {parsed.due_at:%a %d %b, %H:%M}.",
+            message=f"Got it - follow-up set for "
+                    f"{fu.due_at.astimezone(followup.LOCAL_TZ):%a %d %b, %H:%M}.",
             follow_up=fu, ledger=led.finish(),
         )
 
@@ -478,10 +493,17 @@ def _extract_for(event: InboundEvent, led: Ledger) -> LeadExtraction:
     """Pick the extractor for this input kind."""
     if event.kind is InputKind.CONTACT:
         raw = event.text
-        for att in event.attachments:
-            if att.data:
-                raw = att.data.decode("utf-8", errors="replace")
-                break
+        blob = next((a for a in event.attachments if a.data), None)
+        if blob:
+            raw = blob.data.decode("utf-8", errors="replace")
+        elif event.attachments:
+            # The channel swallows a failed download. Without this, an empty
+            # vCard parsed to an all-None lead at confidence 1.0 and the bot
+            # said "I've got this contact" about nothing. Same idiom as the
+            # IMAGE and AUDIO branches below.
+            raise extract.ExtractionFailed("contact attachment could not be downloaded")
+        if not raw.strip():
+            raise extract.ExtractionFailed("nothing readable on that contact")
         # Deterministic parse - a vCard is already structured, so no model
         # call and no chance of hallucination.
         with led.span(Component.LLM, "vcard-parser", "parse_vcard  # deterministic, no model"):
@@ -573,7 +595,8 @@ def attach_note(
         )
         with led.span(Component.DB, "sqlite", "create_follow_up"):
             store.create_follow_up(fu)
-        message += f" Follow-up set for {fu_parse.due_at:%a %d %b, %H:%M}."
+        message += (f" Follow-up set for "
+                    f"{fu_parse.due_at.astimezone(followup.LOCAL_TZ):%a %d %b, %H:%M}.")
 
     elif fu_parse.resolution is FollowUpResolution.AMBIGUOUS:
         # Recorded, but NOT scheduled. The brief forbids guessing.
@@ -658,8 +681,19 @@ def _handle_command(event: InboundEvent, store: Store, led: Ledger) -> PipelineR
         )
 
     if action == "update_lead":
-        changes = {k: v for k, v in cmd.items()
-                   if k not in ("action", "lead_id") and v not in (None, "")}
+        # Strip, then drop blanks: a lone space passed the old `not in ("")`
+        # test and wiped a stored mobile (and its dedupe key). An empty
+        # change set used to reply "Updated  for X" having written nothing.
+        # The guard sits outside the span so the ledger keeps its DB entry.
+        changes = {
+            k: (v.strip() if isinstance(v, str) else v)
+            for k, v in cmd.items()
+            if k not in ("action", "lead_id")
+            and v is not None
+            and (not isinstance(v, str) or v.strip())
+        }
+        if not changes:
+            return _fail(led, "Nothing to update - fill in a field before saving.")
         with led.span(Component.DB, "sqlite", "update_lead"):
             lead = store.update_lead(lead_id, changes)
         if not lead:

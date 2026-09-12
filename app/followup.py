@@ -22,13 +22,18 @@ that is what makes this testable.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.schemas import FollowUpParse, FollowUpResolution
 
 # Business-hours default for a bare date. Stated, not hidden: if the user
 # says "Tuesday" we still ask, but if they say "3 March" we schedule 09:00.
 DEFAULT_HOUR = 9
+# Parse in the salesperson's local time, store in UTC. Intrakore is in the
+# UAE (no DST). Without this "in 2 minutes" printed a UTC clock four hours
+# off the wall, and the dashboard (browser-local) disagreed with the card.
+# Stored values MUST be UTC: SQLiteStore.due_follow_ups compares ISO text.
+LOCAL_TZ = timezone(timedelta(hours=4))  # Asia/Dubai
 
 _WEEKDAYS = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
@@ -90,6 +95,7 @@ def parse_follow_up(
         return FollowUpParse(
             resolution=FollowUpResolution.NONE, raw_instruction=instruction or ""
         )
+    now = now.astimezone(LOCAL_TZ)
 
     has_weekday = any(d in text.lower() for d in _WEEKDAYS)
     has_explicit_date = bool(_ISO_DATE.search(text))
@@ -131,7 +137,7 @@ def parse_follow_up(
             )
         return FollowUpParse(
             resolution=FollowUpResolution.RESOLVED,
-            due_at=due,
+            due_at=due.astimezone(timezone.utc),
             raw_instruction=instruction,
             reasoning=f"relative offset: {n} {unit}(s) from now",
         )
@@ -146,7 +152,7 @@ def parse_follow_up(
         )
         return FollowUpParse(
             resolution=FollowUpResolution.RESOLVED,
-            due_at=due,
+            due_at=due.astimezone(timezone.utc),
             raw_instruction=instruction,
             reasoning="explicit date",
         )
@@ -159,7 +165,7 @@ def parse_follow_up(
         )
         return FollowUpParse(
             resolution=FollowUpResolution.RESOLVED,
-            due_at=due,
+            due_at=due.astimezone(timezone.utc),
             raw_instruction=instruction,
             reasoning="tomorrow",
         )
@@ -189,7 +195,7 @@ def parse_follow_up(
             )
             return FollowUpParse(
                 resolution=FollowUpResolution.RESOLVED,
-                due_at=due,
+                due_at=due.astimezone(timezone.utc),
                 raw_instruction=instruction,
                 reasoning=(
                     f"qualified weekday: {qualified.group(0)}" if qualified
