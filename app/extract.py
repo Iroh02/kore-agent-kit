@@ -64,7 +64,8 @@ Return ONLY what is actually present in the input. Rules:
    when the input is messy, partial, or the image is hard to read.
 5. uncertain_fields: name any field you guessed at or read with difficulty.
 6. source_quote: the span of input the details came from, so a human can
-   check without re-running this."""
+   check without re-running this. Keep it under 12 words - it is a debugging
+   aid, and every token here is latency the salesperson waits through."""
 
 CARD_SYSTEM = LEAD_SYSTEM + """
 
@@ -104,6 +105,7 @@ def extract_lead_from_text(text: str, ledger: Ledger) -> LeadExtraction:
         ledger=ledger,
         component=Component.LLM,
         detail="lead_from_text",
+        effort="low",
     )
 
 
@@ -135,21 +137,38 @@ def extract_lead_from_card(
 
 
 def _parse_lead(
-    system: str, content: list[dict], ledger: Ledger, component: Component, detail: str
+    system: str, content: list[dict], ledger: Ledger, component: Component,
+    detail: str, effort: str | None = None,
 ) -> LeadExtraction:
-    """One structured call, one retry on validation failure, then abstain."""
+    """One structured call, one retry on validation failure, then abstain.
+
+    `effort` tunes how much the model thinks. MEASURED on this workload:
+
+        default   4965ms  346 out tok  $0.0097
+        low       3254ms  185 out tok  $0.0057   <- same extraction
+
+    Output tokens ARE the latency - they are generated serially - so cutting
+    reasoning the task doesn't need cuts the wait by a third. Field
+    extraction from a sentence is not a task that rewards deliberation.
+
+    Vision is deliberately left at default: reading a photographed card is
+    the genuinely hard input, and that is where thinking earns its cost.
+    """
     messages = [{"role": "user", "content": content}]
 
     for attempt in range(2):
         with ledger.span(component, settings.extraction_model, detail) as span:
             try:
-                resp = client().messages.parse(
+                kwargs = dict(
                     model=settings.extraction_model,
                     max_tokens=2048,
                     system=_system(system),
                     messages=messages,
                     output_format=LeadExtraction,
                 )
+                if effort:
+                    kwargs["output_config"] = {"effort": effort}
+                resp = client().messages.parse(**kwargs)
                 span.record_claude(resp.usage)
                 return resp.parsed_output
             except anthropic.APIError as exc:
@@ -191,6 +210,7 @@ def extract_meeting_note(text: str, ledger: Ledger) -> MeetingNoteExtraction:
             system=_system(NOTES_SYSTEM),
             messages=[{"role": "user", "content": text}],
             output_format=MeetingNoteExtraction,
+            output_config={"effort": "low"},
         )
         span.record_claude(resp.usage)
         return resp.parsed_output
