@@ -38,9 +38,14 @@ _WEEKDAYS = {
 # "after 2 days", "in 3 weeks", "in a week", "in 2 minutes"
 # Minutes exist for the demo: "follow up in 2 minutes" lets a scheduled
 # reminder fire live in front of the room.
+# Voice notes say "two days", not "2 days" - Deepgram writes small numbers
+# as words, so the parser has to read them. "a couple of weeks" too.
+_WORD_NUMS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4,
+              "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+              "ten": 10, "couple": 2, "few": 3}
 _RELATIVE = re.compile(
-    r"\b(?:after|in)\s+(?P<n>\d+|a|an)\s+"
-    r"(?P<unit>min|mins|minute|hour|day|week|month)s?\b",
+    r"\b(?:after|in)\s+(?:a\s+)?(?P<n>\d+|" + "|".join(_WORD_NUMS) + r")"
+    r"(?:\s+of)?\s+(?P<unit>min|mins|minute|hour|day|week|month)s?\b",
     re.I,
 )
 # "tomorrow", "next week"
@@ -105,7 +110,7 @@ def parse_follow_up(
     m = _RELATIVE.search(text)
     if m:
         raw_n = m.group("n").lower()
-        n = 1 if raw_n in ("a", "an") else int(raw_n)
+        n = int(raw_n) if raw_n.isdigit() else _WORD_NUMS[raw_n]
         unit = m.group("unit").lower()
         delta = {
             # Minutes exist for the demo: "follow up in 2 minutes" lets a

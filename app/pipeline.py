@@ -92,6 +92,13 @@ async def _route(event: InboundEvent, store: Store, led: Ledger) -> PipelineResu
             pending = store.get_pending_clarification(
                 event.user_id, event.conversation_id
             )
+        if pending and _expired(pending):
+            # A question nobody answered in CLARIFY_TTL_S is stale. Left in
+            # place it hijacks whatever the salesperson says next - the
+            # meeting notes become the "company name". Found live.
+            with led.span(Component.DB, "sqlite", "clear_pending_clarification"):
+                store.clear_pending_clarification(event.user_id, event.conversation_id)
+            pending = None
         if pending:
             return _handle_clarification(event, pending, store, led)
 
@@ -110,6 +117,22 @@ async def _route(event: InboundEvent, store: Store, led: Ledger) -> PipelineResu
     if event.kind in (InputKind.TEXT, InputKind.IMAGE, InputKind.CONTACT, InputKind.AUDIO):
         return _handle_capture(event, store, led)
     return _fail(led, "I don't know how to handle that kind of message yet.")
+
+
+# How long an unanswered question stays live. After this the next message is
+# a new message, not a late answer.
+CLARIFY_TTL_S = 10 * 60
+# A company name is a few words. Anything longer is not an answer to
+# "which company?" - it is the next thing the salesperson wanted to say.
+MAX_COMPANY_ANSWER_WORDS = 8
+
+
+def _expired(pending: dict) -> bool:
+    try:
+        created = datetime.fromisoformat(pending["created_at"])
+    except Exception:
+        return True
+    return (_now() - created).total_seconds() > CLARIFY_TTL_S
 
 
 # Leading filler people type when answering "which company?". Stripped
@@ -152,6 +175,13 @@ def _answer_company(
     company = _COMPANY_FILLER.sub("", answer).strip(" .,\n\t")
     if not company:
         return _clarify(led, pending["question"], missing=["company_name"])
+    if len(company.split()) > MAX_COMPANY_ANSWER_WORDS:
+        # Not an answer - a new message that arrived while a question was
+        # still open. Found live: meeting notes became a 30-word "company".
+        # Drop the question and route this message normally.
+        with led.span(Component.DB, "sqlite", "clear_pending_clarification"):
+            store.clear_pending_clarification(event.user_id, event.conversation_id)
+        return _handle_capture(event, store, led)
 
     # Rehydrate the extraction we held back rather than re-running the model.
     extraction = LeadExtraction(**pending["payload"])
@@ -530,6 +560,8 @@ def _handle_command(event: InboundEvent, store: Store, led: Ledger) -> PipelineR
         if not lead:
             return _fail(led, "I couldn't find that lead.")
         with led.span(Component.DB, "sqlite", "set_pending_note"):
+            # A deliberate button press supersedes any question still open.
+            store.clear_pending_clarification(event.user_id, event.conversation_id)
             store.set_pending_note(event.user_id, event.conversation_id, lead_id)
         who = lead.company_name or "that lead"
         return PipelineResult(

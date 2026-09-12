@@ -260,7 +260,7 @@ class SQLiteStore:
         self, user_id: str, conversation_id: str
     ) -> dict | None:
         row = self._conn.execute(
-            "SELECT kind, payload_json, question, attempts FROM pending_clarifications "
+            "SELECT kind, payload_json, question, attempts, created_at FROM pending_clarifications "
             "WHERE user_id = ? AND conversation_id = ?",
             (user_id, conversation_id),
         ).fetchone()
@@ -271,6 +271,7 @@ class SQLiteStore:
             "payload": json.loads(row["payload_json"]),
             "question": row["question"],
             "attempts": row["attempts"],
+            "created_at": row["created_at"],
         }
 
     def clear_pending_clarification(self, user_id: str, conversation_id: str) -> None:
