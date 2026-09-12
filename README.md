@@ -1,118 +1,79 @@
-# kore-agent-kit
+# kore-agent-kit — Chat-to-Lead + Follow-up Automation
 
-A grounded agent over your own documents, with a visible tool-call trace.
-No pip install, no vector database, no framework: Python 3.9+ and the
-standard library. Built so that hour one of a hackathon goes on the problem
-instead of on dependency resolution.
+A Microsoft Teams bot that turns a salesperson's messages into structured
+leads, meeting notes and follow-ups — with the cost and latency of every
+action broken down by component.
 
-```bash
-git clone <this repo> && cd kore-agent-kit
-python3 -m tests.smoke      # 10 seconds, proves the whole chain works
-python3 -m app.server       # http://localhost:8000
-```
-
-If both of those pass, you are set up. There is no step three.
-
-**Working with someone else on this?** Read
-[WORKING-AGREEMENT.md](WORKING-AGREEMENT.md) first. It is short, and it is
-the difference between shipping and spending the last hour on merge
-conflicts.
-
-It runs with **no API key**. Retrieval is real; only the final wording is
-canned. The moment you get a key, drop it in `.env` and the same code path
-goes live. Nothing about your demo can be broken by a missing credential or
-a dead wifi connection.
-
-## Wiring up a real model
+Built for **Intrakore AI Hackathon, Use Case 01**.
 
 ```bash
-cp .env.example .env      # then set LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
+python -m venv .venv
+.venv/Scripts/python -m pip install -e .          # macOS/Linux: .venv/bin/python
+.venv/Scripts/python -m uvicorn app.api:app --reload --port 8000
 ```
 
-Any OpenAI-compatible endpoint works: OpenAI, Azure, Groq, Together,
-Fireworks, OpenRouter, vLLM, Ollama. `.env.example` lists the exact two
-lines to change for each.
+- `http://localhost:8000` — live dashboard: records and economics as they happen
+- `http://localhost:8000/docs` — OpenAPI
 
-## What is in the box
+It runs with **no API key**. Claude, Teams and speech-to-text each degrade to
+a clearly-labelled mock rather than failing, and `/api/health` reports which
+is which. Drop keys into `.env` (copy `.env.example`) to go live.
 
-| File | What it does | Where you will actually edit |
+## What it does
+
+| Input | How it arrives | Handling |
 |---|---|---|
-| `app/rag.py` | chunk, index, retrieve (TF-IDF + stemming) | chunk size, file types |
-| `app/tools.py` | the tool registry | **add your tools here** |
-| `app/agent.py` | tool-calling loop + trace | the system prompt |
-| `app/llm.py` | provider client, retries, mock | rarely |
-| `app/server.py` | stdlib HTTP + JSON API | add endpoints |
-| `ui/index.html` | chat UI with a live agent trace | branding |
-| `app/evalkit.py` | pass/fail harness | run it before you present |
-| `data/` | the knowledge base | **replace entirely** |
+| Free-text details | Teams message | Claude structured extraction |
+| Shared contact | `.vcf` attachment | Deterministic parse — no model, cannot hallucinate |
+| Business card | Photo | Claude vision, one call, no separate OCR |
+| Meeting notes | Text or voice note | Transcribed if voice; original always retained |
+| Follow-up | "follow up after 2 days" | Resolved, or **asked about** if ambiguous |
 
-## The three things to do first, in order
+Full CRUD on leads, notes and follow-ups — from Adaptive Card buttons in chat
+and from the REST API.
 
-**1. Swap the corpus.** Delete everything in `data/`, drop in the
-organisers' files, hit Reindex in the UI. Supported: `.md .txt .csv .json
-.pdf .log .py .sql`. CSVs index one row per chunk, so row-level questions
-retrieve cleanly.
+## Three rules the code holds to
 
-**2. Add one tool that is specific to the problem.** This is the whole
-game. A generic RAG chatbot is what every other team will build. A tool
-that does the domain's actual arithmetic is what gets remembered. Pattern:
+- **Never invent a field value.** Missing comes back as `null` and the bot
+  asks. A hallucinated phone number is the worst thing this system can do.
+- **Never silently guess a date.** `FollowUpParse` is tri-state:
+  `RESOLVED | AMBIGUOUS | NONE`.
+- **Nothing crashes in front of the salesperson.** Every external call
+  degrades to a typed error the bot can say out loud.
 
-```python
-def check_margin(item_code: str) -> str:          # app/tools.py
-    ...
-    return "B-201 blockwork: budget 290000, actual 318000, overrun 9.7%"
+## Layout
 
-REGISTRY["check_margin"] = check_margin
-SCHEMAS.append({"type": "function", "function": {
-    "name": "check_margin",
-    "description": "Compare budget against actual cost for one BOQ item.",
-    "parameters": {"type": "object",
-                   "properties": {"item_code": {"type": "string"}},
-                   "required": ["item_code"]}}})
-```
+| Path | Role |
+|---|---|
+| `app/schemas.py` | The contract between the channel and pipeline halves |
+| `app/pipeline.py` | Router — idempotency, dedupe, clarification |
+| `app/extract.py` | Text, vCard, vision, transcript → validated models |
+| `app/followup.py` | Tri-state date resolution |
+| `app/store.py` | `Store` interface + SQLite, CRUD, dedupe |
+| `app/ledger.py` | Cost + latency from real token usage |
+| `app/transcribe.py` | Speech-to-text |
+| `app/api.py` | FastAPI: webhook, REST CRUD, SSE feed |
+| `app/channels/` | Teams transport and Adaptive Cards |
+| `ui/dashboard.html` | Live projected dashboard |
 
-Three rules for tools: return a **string**, keep it **short** (long dumps
-make the agent wander), and write a description a stranger could follow,
-because the description *is* the prompt.
+## Architecture
 
-**3. Write three eval cases before you write the demo script.** Edit
-`tests/eval_cases.json`, then `python3 -m app.evalkit`. A pass-rate on a
-slide is the single cheapest way to look like an engineer rather than a
-demo-builder.
+A **deterministic pipeline, not an agent.** Input type is known and output
+schema is known, so control flow is code — which is what makes the cost and
+latency figures explainable. The one open-ended surface, free-text CRUD, uses
+tool calling via the SDK's own tool runner. No agent framework.
 
-## Known limits, and the honest answer to each
+## What is mocked
 
-These are real weaknesses. Judges who know the field will find them, so say
-them first, in your own words. It reads as judgement, not as gaps.
+There is no Intrakore sandbox or credentials, so persistence is our own
+SQLite store behind a `Store` interface, not the Intrakore CRM. The brief
+permits *"a working backend application or data store"*. A production
+integration would need auth and token refresh, field mapping, idempotency
+keys, rate limits, an error taxonomy and a retry/DLQ path.
 
-- **Keyword retrieval misses synonyms.** "Retention" will not match
-  "retained". Fix: let the agent search twice with different wording (the
-  system prompt already tells it to), or swap `rag.search` for embeddings
-  once you have the key. The interface stays identical.
-- **The forecast is a straight line.** Eight data points do not support
-  anything more. The tool reports its own residual spread; when that band is
-  wide, that *is* the finding.
-- **No auth, no rate limits, no persistence.** Correct for a one-day build.
-  Name it as a deliberate cut, not an oversight.
-- **The trace is truncated to 400 chars per step.** Enough to demo, not
-  enough to audit. Real logging is a day-two problem.
+## Working here
 
-## API
-
-```
-GET  /api/health   -> provider, model, chunk and file counts
-POST /api/ingest   -> reindex data/
-POST /api/chat     {"message": "...", "history": [...]}
-                   -> {answer, trace[], sources[], steps, elapsed_s}
-```
-
-## If something breaks on the day
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| "No matching passages found" | corpus not indexed | POST `/api/ingest`, check `data/` is not empty |
-| `HTTP 401` | bad key | check `.env`, no quotes, no trailing spaces |
-| `HTTP 404` on chat completions | wrong base URL | must end in `/v1`, no trailing slash |
-| Agent loops to the step limit | tool description is vague | rewrite the description, raise `AGENT_MAX_STEPS` |
-| PDF indexes as nothing | `pypdf` missing | `pip install pypdf`, or convert to text |
-| Everything is on fire, 10 min to demo | — | unset `LLM_API_KEY`. Mock mode always runs. |
+[`DECISIONS.md`](DECISIONS.md) — every choice, what it rejected, what it costs.
+[`WORK-SPLIT.md`](WORK-SPLIT.md) — who owns what, and the demo run of show.
+[`CLAUDE.md`](CLAUDE.md) — hard constraints.
+[`WORKING-AGREEMENT.md`](WORKING-AGREEMENT.md) — git discipline.

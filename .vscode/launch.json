@@ -5,24 +5,18 @@
       "name": "Serve (F5)",
       "type": "debugpy",
       "request": "launch",
-      "module": "app.server",
+      "module": "uvicorn",
+      "args": ["app.api:app", "--reload", "--port", "8000"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": false
     },
     {
-      "name": "Smoke test",
+      "name": "Pytest",
       "type": "debugpy",
       "request": "launch",
-      "module": "tests.smoke",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Evals",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "app.evalkit",
+      "module": "pytest",
+      "args": ["-v"],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     }

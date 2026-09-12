@@ -1,7 +1,7 @@
 {
   "files.exclude": {
     "**/__pycache__": true,
-    "**/.index.json": true
+    "**/kore.db": true
   },
   "python.analysis.typeCheckingMode": "basic",
   "python.terminal.activateEnvironment": false,

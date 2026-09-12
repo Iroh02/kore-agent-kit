@@ -28,13 +28,13 @@ files up front and stick to it. A workable split:
 
 | Owner | Files |
 |---|---|
-| Person A | `app/agent.py`, `app/tools.py`, `tests/` |
-| Person B | `app/server.py`, `ui/index.html`, `data/` |
-| Either, announce first | `app/rag.py`, `app/config.py`, `README.md` |
+| Nandita | `app/schemas.py`, `app/extract.py`, `app/followup.py`, `app/store.py`, `app/ledger.py`, `app/pipeline.py`, `app/scheduler.py`, `app/transcribe.py`, `tests/` |
+| Vishal | `app/api.py`, `app/channels/`, `fixtures/`, `ui/dashboard.html` |
+| Either, announce first | `app/settings.py`, `README.md`, `CLAUDE.md` |
 
-`app/tools.py` is the file you will both want. If you both have to touch it,
-**append new tools at the bottom** and never reorder what is already there.
-Appends merge cleanly; reordering does not.
+`app/schemas.py` is the file you will both depend on. It is the contract
+between the two halves, so a change there breaks both sides at once:
+**say so in chat before editing it.** Everything else, stay in your column.
 
 ## Secrets
 
