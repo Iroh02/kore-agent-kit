@@ -109,19 +109,34 @@ vCard → transcription → follow-up parsing → scheduler → evals.
 
 ---
 
-## Timeline
+## Timeline (organisers' actual schedule)
+
+Build time is **5 hours, not 6** - lunch is a hard pause.
 
 | Time | |
 |---|---|
-| 11:00–11:45 | Vishal: echo bot in Teams. Nandita: schemas, store, ledger. |
-| 11:45 | **Fixtures committed.** Both fully parallel from here. |
-| 11:45–13:00 | **One vertical slice:** typed lead → extraction → sqlite → confirmation card. Nothing else until this works end to end. |
-| 13:00–14:15 | Business card (vision) + shared contact with the clarification loop |
-| 14:15–15:15 | Meeting notes, voice + transcription, follow-up with the ambiguous branch |
-| 15:15–15:45 | Cost/latency panel, and **finish CRUD — update and delete, not just create** |
-| 15:45–16:15 | Evals, risks slide, architecture diagram |
-| **16:15** | **FREEZE. Record the screen capture.** |
-| 16:15–17:00 | Rehearse. Demo-breaking fixes only. |
+| 11:00-13:00 | **Sprint 1 - think + prove.** Problem, architecture, data flow, risks, and the thinnest end-to-end proof. Both must contribute. |
+| **13:00** | **5-min check-in with judges.** Have something live to show. |
+| 13:15-14:00 | Lunch. Build pauses, not scored. Think, don't code. |
+| 14:00-17:00 | **Sprint 2 - build + test.** Integration, edge cases, reliability, prepare the live demo. Only 3 hours. |
+| **14:30** | **Go/no-go on Teams.** Not round-tripping? Demo via /api/simulate and say so. Decide calmly now, not at 16:20. |
+| **16:30** | Organisers' 30-min warning. **Freeze here.** Record the screen capture. |
+| 16:30-17:00 | Rehearse. Demo-breaking fixes only. |
+| 17:00-18:00 | **Presentations: 20 min per team** - 15 min presentation + live demo, 5 min CXO Q&A. **Both of us present and answer.** |
+
+## Presentation split - 15 minutes, both speak
+
+| Who | Minutes | What |
+|---|---|---|
+| Nandita | 2 | Problem framing, and why a pipeline rather than an agent |
+| Vishal | 3 | System flow, Teams channel, data mapping |
+| Both | 6 | **Live demo** - the run of show below |
+| Nandita | 2 | Cost + latency per component, and the sensitivity table |
+| Vishal | 2 | Risks, what's mocked, what production needs |
+| Both | 5 | CXO Q&A |
+
+Rehearse the handoffs. Each of us must be able to answer a question about
+the other's half - the brief says both answer questions.
 
 ## Demo run of show
 
