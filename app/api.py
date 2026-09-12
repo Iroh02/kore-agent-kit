@@ -223,13 +223,40 @@ async def messages(request: Request):
 
     from app.channels.teams import to_inbound_event  # local: avoid import cycle
 
+    # to_inbound_event downloads any attachment, and it runs BEFORE the
+    # pipeline opens its Ledger - so a business card or voice note was
+    # costing real seconds that never appeared in the economics panel.
+    # Time it here and fold it in, or the panel understates every attachment
+    # activity. Parsing either side of the fetch is microseconds.
+    fetch_started = time.perf_counter()
     event = await to_inbound_event(activity)
+    fetch_ms = (time.perf_counter() - fetch_started) * 1000
+
+    # Teams redelivers on a non-200, and pipeline.handle answers a repeat
+    # with the ORIGINAL PipelineResult - same trace_id, same ledger. That
+    # reply must still go out, but its cost was already counted the first
+    # time, so it is neither re-published nor re-annotated here.
+    replay = store.seen_activity(event.activity_id) is not None
 
     typing_task = asyncio.create_task(_send_typing(event, activity))
     result = await pipeline.handle(event, store)
     typing_ms = await typing_task
 
-    if typing_ms is not None:
+    if not replay and event.attachments:
+        fetched = sum(1 for a in event.attachments if a.data)
+        result.ledger.entries.append(
+            CostEntry(
+                component=Component.CHANNEL_API,
+                service="teams.fetch_attachment",
+                input_units=float(len(event.attachments)),
+                unit_label="downloads",
+                latency_ms=fetch_ms,
+                detail=f"{fetched}/{len(event.attachments)} downloaded",
+            )
+        )
+        result.ledger.total_latency_ms += fetch_ms
+
+    if not replay and typing_ms is not None:
         result.ledger.entries.append(
             CostEntry(
                 component=Component.CHANNEL_API,
@@ -243,7 +270,8 @@ async def messages(request: Request):
 
     await _post_reply(event, result, activity)
 
-    publish({"type": "activity", "result": json.loads(result.model_dump_json())})
+    if not replay:
+        publish({"type": "activity", "result": json.loads(result.model_dump_json())})
 
     # Body is ignored by Bot Framework; the reply went out via send_activity.
     return Response(status_code=200)
