@@ -120,6 +120,28 @@ async def fetch_attachment(att: Attachment) -> bytes:
 
 AUDIO_SUFFIXES = (".m4a", ".mp3", ".wav", ".ogg", ".mp4", ".aac", ".webm")
 
+# The bot's own ChannelAccount, learned from inbound traffic.
+#
+# A proactive send (the follow-up scheduler) has no inbound activity to copy
+# addressing from, and the connector is strict about who the sender is:
+# from.id = the MS_APP_ID guid is rejected 403, while the bot's channel
+# account id is accepted. Every inbound activity addresses the bot as its
+# `recipient`, so that is where this comes from - no hardcoded handle, and it
+# stays correct per channel.
+_bot_account: dict | None = None
+
+
+def bot_account() -> dict | None:
+    """The bot's ChannelAccount, or None if no inbound activity seen yet."""
+    return _bot_account
+
+
+def remember_bot_account(activity: dict) -> None:
+    global _bot_account
+    recipient = activity.get("recipient")
+    if isinstance(recipient, dict) and recipient.get("id"):
+        _bot_account = recipient
+
 
 def _classify(name: str, content_type: str) -> InputKind | None:
     """What KIND of input an attachment represents, by type then by suffix."""
@@ -152,6 +174,8 @@ async def to_inbound_event(activity: dict) -> InboundEvent:
     then swallowed the user's NEXT message as its answer. Same failure shape
     as running the pipeline on conversationUpdate. Classify, never drop.
     """
+    remember_bot_account(activity)
+
     raw_attachments = activity.get("attachments") or []
     attachments: list[Attachment] = []
     kinds: list[InputKind] = []

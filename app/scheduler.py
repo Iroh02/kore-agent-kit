@@ -66,19 +66,27 @@ async def fire_due(store: Store, publish: Callable[[dict], None]) -> int:
             try:
                 from app.channels.teams import send_activity
 
-                # The connector rejects any activity without Activity.From
-                # (400 MissingProperty), so a bare {"type","text"} never
-                # reaches the chat. A reply can copy the addressing off the
-                # inbound activity; a proactive send has no inbound message
-                # to copy, so it is rebuilt from what the Lead stored at
-                # creation time. The bot's own ChannelAccount is not stored,
-                # so the app id stands in - the connector authenticates on
-                # the bearer token, not on this id.
+                # The connector rejects an activity with no Activity.From
+                # (400 MissingProperty), and rejects one whose From is the
+                # MS_APP_ID guid (403 Forbidden) - it wants the bot's own
+                # CHANNEL account. A reply copies that off the inbound
+                # activity; a proactive send has none, so channels.teams
+                # caches it from inbound traffic. Measured against live Web
+                # Chat: guid -> 403, channel account -> 200.
+                from app.channels.teams import bot_account
+
+                sender = bot_account()
+                if not sender:
+                    raise RuntimeError(
+                        "no bot ChannelAccount seen yet - cannot address a "
+                        "proactive send until the bot has received a message"
+                    )
+
                 proactive = {
                     "type": "message",
                     "text": text,
                     "conversation": {"id": lead.conversation_id},
-                    "from": {"id": settings.ms_app_id, "name": "Chat to Lead"},
+                    "from": sender,
                 }
                 if lead.owner_user_id:
                     proactive["recipient"] = {"id": lead.owner_user_id}
@@ -88,7 +96,9 @@ async def fire_due(store: Store, publish: Callable[[dict], None]) -> int:
                 )
                 delivered = "sent to chat"
             except Exception as exc:  # noqa: BLE001 - never kill the loop
-                delivered = f"send failed: {type(exc).__name__}"
+                # Include the detail: "HTTPStatusError" alone hid a 403 for
+                # an hour. The status code is what tells you what is wrong.
+                delivered = f"send failed: {type(exc).__name__}: {exc}"[:200]
 
         store.update_follow_up(fu.id, {"status": FollowUpStatus.SENT})
 
