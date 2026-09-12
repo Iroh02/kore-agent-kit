@@ -69,6 +69,8 @@
   .tag.scheduled{color:var(--blue);border-color:#22455F}
   .tag.awaiting_clarification{color:var(--warn);border-color:#5A4715}
   .tag.sent{color:var(--dim)}
+  .conf{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+  .conf.hi{color:var(--ok)} .conf.mid{color:var(--warn)} .conf.lo{color:var(--bad)}
 
   button{background:#1C2733;color:var(--ink);border:1px solid var(--line);
          border-radius:4px;padding:5px 10px;font-size:12px;cursor:pointer;
@@ -140,7 +142,7 @@
       <div class="hd"><h2>Leads &mdash; persisted records</h2><span class="n" id="n-leads">0</span></div>
       <div class="bd">
         <table>
-          <thead><tr><th>Company</th><th>Contact</th><th>Source</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Company</th><th>Contact</th><th>Source</th><th>Conf</th><th>Status</th><th></th></tr></thead>
           <tbody id="leads"></tbody>
         </table>
         <div class="empty" id="leads-empty">No leads yet &mdash; message the bot.</div>
@@ -206,6 +208,7 @@ async function loadLeads(freshId){
           <div class="sub">${esc(l.email)||''}</div></td>
       <td>${name||'<span class="muted">—</span>'}<div class="sub">${esc(l.mobile)||''}</div></td>
       <td><span class="tag ${esc(l.source_kind)}">${esc(l.source_kind)}</span></td>
+      <td><span class="conf ${l.confidence>=0.8?'hi':l.confidence>=0.6?'mid':'lo'}">${(l.confidence??1).toFixed(2)}</span></td>
       <td><span class="tag ${esc(l.status)}">${esc(l.status)}</span></td>
       <td><button onclick="del('${l.id}')">Delete</button></td></tr>`;
   }).join('');

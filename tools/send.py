@@ -7,6 +7,7 @@
     .venv/Scripts/python tools/send.py note  <lead_id>        # taps "Add note"
     .venv/Scripts/python tools/send.py leads                  # list ids
     .venv/Scripts/python tools/send.py demo                   # scripted run of show
+    .venv/Scripts/python tools/send.py reset                  # wipe every lead (and its notes/follow-ups)
 
 Everything goes through POST /api/simulate, which is the same pipeline the
 Teams webhook calls - so a green result here means the pipeline is right and
@@ -95,6 +96,20 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 1
     cmd, rest = argv[0], argv[1:]
+
+    if cmd == "reset":
+        # Through the API, not the file: deleting a lead cascades its notes,
+        # follow-ups and pending-note state, and the server's own connection
+        # sees it immediately - no stale-read, no restart. Open questions
+        # (pending_clarifications) are not lead-scoped; they expire in 10 min
+        # and any new question overwrites them, so they cannot leak into a
+        # fresh run. Reload the dashboard afterwards to zero its counters.
+        leads = _get("/api/leads?limit=1000")
+        for l in leads:
+            urllib.request.urlopen(urllib.request.Request(
+                f"{BASE}/api/leads/{l['id']}", method="DELETE"), timeout=30)
+        print(f"  deleted {len(leads)} lead(s). Reload the dashboard to reset its counters.")
+        return 0
 
     if cmd == "leads":
         for l in _get("/api/leads"):
