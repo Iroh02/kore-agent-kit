@@ -281,6 +281,14 @@ sensitivity table possible.
 files, `extract.py` and `transcribe.py`, behind the pipeline. Swapping it is
 a file change, not an architecture change.
 
-**For a Microsoft-shop COO:** Claude is available on Microsoft Foundry at the
-same per-token prices, billed through the Marketplace. Same model, same
-code, inside their Azure tenant.
+**Their cloud is AWS, not Azure - verified, not inferred.** Teams is their
+collaboration tool; their app subdomains (app/portal/login/api.intrakore.com)
+resolve to an EC2 instance in us-east-1 (AS14618, Amazon). An earlier draft
+of this entry assumed Azure from Teams usage - that was wrong and would have
+been wrong in front of their COO.
+
+**The alignment line, corrected:** Claude is available natively on Amazon
+Bedrock - same model, same code, inside their existing AWS account. Do NOT
+say "same price": Bedrock pricing is set by AWS, in the same range but not
+identical. Gemini has no Bedrock path, which makes it a worse fit for their
+stack, not a better one.
