@@ -124,6 +124,26 @@ CREATE TABLE IF NOT EXISTS pending_notes (
     PRIMARY KEY (user_id, conversation_id)
 );
 
+-- Set when the bot ASKS a question, so the next message is read as the
+-- ANSWER rather than as a new lead. Without this the clarification loops
+-- dead-end: the bot asks "which company?", you type "Acme", and the system
+-- files "Acme" as a brand new lead.
+--
+-- payload_json holds whatever the answer needs to complete:
+--   kind='company'        -> the partial LeadExtraction, not yet written
+--   kind='followup_date'  -> {"follow_up_id": ...}
+-- attempts guards against an answer we still can't parse looping forever.
+CREATE TABLE IF NOT EXISTS pending_clarifications (
+    user_id         TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    payload_json    TEXT NOT NULL,
+    question        TEXT NOT NULL DEFAULT '',
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    PRIMARY KEY (user_id, conversation_id)
+);
+
 CREATE TABLE IF NOT EXISTS leads (
     id              TEXT PRIMARY KEY,
     company_name    TEXT,
@@ -217,6 +237,45 @@ class SQLiteStore:
     def clear_pending_note(self, user_id: str, conversation_id: str) -> None:
         self._conn.execute(
             "DELETE FROM pending_notes WHERE user_id = ? AND conversation_id = ?",
+            (user_id, conversation_id),
+        )
+        self._conn.commit()
+
+    # -- pending clarification state ----------------------------------------
+
+    def set_pending_clarification(
+        self, user_id: str, conversation_id: str, kind: str,
+        payload_json: str, question: str, attempts: int = 0,
+    ) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO pending_clarifications "
+            "(user_id, conversation_id, kind, payload_json, question, attempts, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (user_id, conversation_id, kind, payload_json, question,
+             attempts, _now().isoformat()),
+        )
+        self._conn.commit()
+
+    def get_pending_clarification(
+        self, user_id: str, conversation_id: str
+    ) -> dict | None:
+        row = self._conn.execute(
+            "SELECT kind, payload_json, question, attempts FROM pending_clarifications "
+            "WHERE user_id = ? AND conversation_id = ?",
+            (user_id, conversation_id),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "kind": row["kind"],
+            "payload": json.loads(row["payload_json"]),
+            "question": row["question"],
+            "attempts": row["attempts"],
+        }
+
+    def clear_pending_clarification(self, user_id: str, conversation_id: str) -> None:
+        self._conn.execute(
+            "DELETE FROM pending_clarifications WHERE user_id = ? AND conversation_id = ?",
             (user_id, conversation_id),
         )
         self._conn.commit()

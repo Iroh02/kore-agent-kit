@@ -9,6 +9,8 @@ out loud, including on failure. Nothing here may raise into the webhook.
 
 from __future__ import annotations
 
+import json
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -82,6 +84,17 @@ async def _route(event: InboundEvent, store: Store, led: Ledger) -> PipelineResu
     if event.kind is InputKind.COMMAND:
         return _handle_command(event, store, led)
 
+    # Did we just ASK something? Then this message is the ANSWER, not a new
+    # lead. Checked before the pending-note branch because an unanswered
+    # question is the most recent thing that happened in the conversation.
+    if event.kind is InputKind.TEXT:
+        with led.span(Component.DB, "sqlite", "get_pending_clarification"):
+            pending = store.get_pending_clarification(
+                event.user_id, event.conversation_id
+            )
+        if pending:
+            return _handle_clarification(event, pending, store, led)
+
     # Is this message a NOTE on an existing lead rather than a new lead?
     # We do not guess. The salesperson tapped "Add note" on a lead card,
     # which set this flag - so the next thing they send is scoped to it.
@@ -97,6 +110,109 @@ async def _route(event: InboundEvent, store: Store, led: Ledger) -> PipelineResu
     if event.kind in (InputKind.TEXT, InputKind.IMAGE, InputKind.CONTACT, InputKind.AUDIO):
         return _handle_capture(event, store, led)
     return _fail(led, "I don't know how to handle that kind of message yet.")
+
+
+# Leading filler people type when answering "which company?". Stripped
+# deterministically rather than with a model call: it is predictable, free,
+# and the confirmation card shows what was captured so a wrong read is one
+# tap from being fixed.
+_COMPANY_FILLER = re.compile(
+    r"^\s*(?:(?:he|she|they)(?:'s| is| are)?\s+)?"
+    r"(?:with|at|from|works? (?:at|for)|the company is|company is|it'?s|its)\s+",
+    re.I,
+)
+MAX_CLARIFY_ATTEMPTS = 2
+
+
+def _handle_clarification(
+    event: InboundEvent, pending: dict, store: Store, led: Ledger
+) -> PipelineResult:
+    """The user is answering a question we asked. Route by what we asked."""
+    answer = (event.text or "").strip()
+    kind = pending["kind"]
+    attempts = pending["attempts"]
+
+    if not answer:
+        return _fail(led, pending["question"])
+
+    if kind == "company":
+        return _answer_company(event, pending, answer, store, led)
+    if kind == "followup_date":
+        return _answer_followup_date(event, pending, answer, attempts, store, led)
+
+    with led.span(Component.DB, "sqlite", "clear_pending_clarification"):
+        store.clear_pending_clarification(event.user_id, event.conversation_id)
+    return _fail(led, "Sorry, I lost track of what I was asking. Start again?")
+
+
+def _answer_company(
+    event: InboundEvent, pending: dict, answer: str, store: Store, led: Ledger
+) -> PipelineResult:
+    """The missing company arrived. Complete the lead we refused to write."""
+    company = _COMPANY_FILLER.sub("", answer).strip(" .,\n\t")
+    if not company:
+        return _clarify(led, pending["question"], missing=["company_name"])
+
+    # Rehydrate the extraction we held back rather than re-running the model.
+    extraction = LeadExtraction(**pending["payload"])
+    extraction.company_name = company
+
+    with led.span(Component.DB, "sqlite", "clear_pending_clarification"):
+        store.clear_pending_clarification(event.user_id, event.conversation_id)
+
+    return _persist_lead(extraction, event, store, led,
+                         source_kind=InputKind(pending["payload"].get(
+                             "_source_kind", InputKind.TEXT.value)))
+
+
+def _answer_followup_date(
+    event: InboundEvent, pending: dict, answer: str, attempts: int,
+    store: Store, led: Ledger,
+) -> PipelineResult:
+    """A date arrived for a follow-up we refused to guess at."""
+    fu_id = pending["payload"].get("follow_up_id", "")
+    parsed = followup.parse_follow_up(answer, _now(), answering=True)
+
+    if parsed.resolution is FollowUpResolution.RESOLVED:
+        with led.span(Component.DB, "sqlite", "update_follow_up"):
+            fu = store.update_follow_up(fu_id, {
+                "due_at": parsed.due_at,
+                "status": FollowUpStatus.SCHEDULED,
+                "clarification_question": None,
+            })
+            store.clear_pending_clarification(event.user_id, event.conversation_id)
+        return PipelineResult(
+            trace_id=led.trace_id, status=ResultStatus.UPDATED,
+            message=f"Got it - follow-up set for {parsed.due_at:%a %d %b, %H:%M}.",
+            follow_up=fu, ledger=led.finish(),
+        )
+
+    # Still can't pin it down. Ask once more, then stop rather than loop.
+    if attempts + 1 >= MAX_CLARIFY_ATTEMPTS:
+        with led.span(Component.DB, "sqlite", "clear_pending_clarification"):
+            store.clear_pending_clarification(event.user_id, event.conversation_id)
+        return PipelineResult(
+            trace_id=led.trace_id, status=ResultStatus.UPDATED,
+            message=(
+                "I still couldn't pin that down, so I've left the follow-up "
+                "unscheduled rather than guess. Set a date from the lead card "
+                "whenever you know it."
+            ),
+            follow_up=store.get_follow_up(fu_id), ledger=led.finish(),
+        )
+
+    question = parsed.clarification_question or (
+        "What date should I set? A day like Monday, or a date like 2026-09-20."
+    )
+    with led.span(Component.DB, "sqlite", "set_pending_clarification"):
+        store.set_pending_clarification(
+            event.user_id, event.conversation_id, "followup_date",
+            json.dumps({"follow_up_id": fu_id}), question, attempts + 1,
+        )
+    return PipelineResult(
+        trace_id=led.trace_id, status=ResultStatus.NEEDS_CLARIFICATION,
+        message=question, clarification_question=question, ledger=led.finish(),
+    )
 
 
 def _handle_note(
@@ -132,7 +248,10 @@ def _handle_note(
     if not text.strip():
         return _fail(led, "That looked empty - what came out of the meeting?")
 
-    result = attach_note(lead_id, text, event.kind, store, led, media_ref=media_ref)
+    result = attach_note(
+        lead_id, text, event.kind, store, led, media_ref=media_ref,
+        user_id=event.user_id, conversation_id=event.conversation_id,
+    )
 
     # Note captured, so stop scoping messages to this lead.
     with led.span(Component.DB, "sqlite", "clear_pending_note"):
@@ -160,14 +279,34 @@ def _handle_capture(event: InboundEvent, store: Store, led: Ledger) -> PipelineR
     # --- Missing required fields: ASK, never invent -----------------------
     missing = [f for f in REQUIRED if not getattr(extraction, f, None)]
     if missing:
-        # This is the demo beat for mode 2: a shared contact rarely carries a
-        # company, so we stop and ask instead of filing an unusable lead.
-        return _clarify(
-            led,
-            _ask_for(missing, extraction),
-            missing=missing,
-        )
+        # The demo beat for mode 2: a shared contact rarely carries a company,
+        # so we stop and ask instead of filing an unusable lead.
+        #
+        # The extraction is PARKED, not discarded - the brief says company is
+        # mandatory BEFORE the lead is created, so we must not write a partial
+        # record. When the answer arrives, _answer_company rehydrates this
+        # payload rather than re-running the model, which keeps the whole
+        # clarification round trip free.
+        question = _ask_for(missing, extraction)
+        payload = extraction.model_dump()
+        payload["_source_kind"] = event.kind.value
+        with led.span(Component.DB, "sqlite", "set_pending_clarification"):
+            store.set_pending_clarification(
+                event.user_id, event.conversation_id, "company",
+                json.dumps(payload), question,
+            )
+        return _clarify(led, question, missing=missing)
 
+    return _persist_lead(extraction, event, store, led)
+
+
+def _persist_lead(
+    extraction: LeadExtraction, event: InboundEvent, store: Store, led: Ledger,
+    source_kind: InputKind | None = None,
+) -> PipelineResult:
+    """Dedupe then write. Shared by the direct path and the answered-
+    clarification path, so both behave identically - a lead completed by
+    answering a question still gets the duplicate check."""
     # --- Duplicate check --------------------------------------------------
     with led.span(Component.DB, "sqlite", "find_duplicate"):
         dup = store.find_duplicate(extraction.email, extraction.mobile)
@@ -200,7 +339,7 @@ def _handle_capture(event: InboundEvent, store: Store, led: Ledger) -> PipelineR
         estimated_value=extraction.estimated_value,
         enquiry_type=extraction.enquiry_type,
         status=LeadStatus.NEEDS_REVIEW if low_confidence else LeadStatus.NEW,
-        source_kind=event.kind,
+        source_kind=source_kind or event.kind,
         confidence=extraction.confidence,
         conversation_id=event.conversation_id,
         service_url=event.service_url,
@@ -279,7 +418,7 @@ def _ask_for(missing: list[str], extraction: LeadExtraction) -> str:
 
 def attach_note(
     lead_id: str, text: str, kind: InputKind, store: Store, led: Ledger,
-    media_ref: str | None = None,
+    media_ref: str | None = None, user_id: str = "", conversation_id: str = "",
 ) -> PipelineResult:
     """Publish meeting notes against a lead and schedule any follow-up.
 
@@ -330,6 +469,16 @@ def attach_note(
         )
         with led.span(Component.DB, "sqlite", "create_follow_up"):
             store.create_follow_up(fu)
+        # Park the question so the next message is read as the ANSWER.
+        # Without this the bot asks "which day?" and the reply "Monday"
+        # becomes a brand new lead - the exact dead end this closes.
+        if user_id:
+            with led.span(Component.DB, "sqlite", "set_pending_clarification"):
+                store.set_pending_clarification(
+                    user_id, conversation_id, "followup_date",
+                    json.dumps({"follow_up_id": fu.id}),
+                    fu_parse.clarification_question or "", 0,
+                )
         return PipelineResult(
             trace_id=led.trace_id,
             status=ResultStatus.NEEDS_CLARIFICATION,

@@ -63,11 +63,19 @@ _AMBIGUOUS_HINTS = [
 ]
 
 
-def parse_follow_up(instruction: str, now: datetime) -> FollowUpParse:
+def parse_follow_up(
+    instruction: str, now: datetime, answering: bool = False
+) -> FollowUpParse:
     """Resolve a follow-up instruction against `now`.
 
     Order matters: ambiguity is checked FIRST. "next week on Tuesday" would
     otherwise resolve on the weekday branch, but a bare "next week" must ask.
+
+    `answering=True` means the user is replying to a question we just asked.
+    That changes what the SAME words mean: a bare "Tuesday" volunteered in a
+    meeting note is ambiguous (this week or next?), but "Tuesday" typed in
+    answer to "which day works?" plainly means the coming Tuesday. Without
+    this distinction the clarification loop asks the same question forever.
     """
     text = (instruction or "").strip()
     if not text:
@@ -149,7 +157,7 @@ def parse_follow_up(instruction: str, now: datetime) -> FollowUpParse:
     for name, idx in _WEEKDAYS.items():
         if re.search(rf"\b{name}\b", text, re.I):
             qualified = re.search(rf"\b(next|this|coming)\s+{name}\b", text, re.I)
-            if not qualified:
+            if not qualified and not answering:
                 return FollowUpParse(
                     resolution=FollowUpResolution.AMBIGUOUS,
                     clarification_question=(
@@ -160,7 +168,7 @@ def parse_follow_up(instruction: str, now: datetime) -> FollowUpParse:
                     reasoning="bare weekday - could be either week",
                 )
             days_ahead = (idx - now.weekday()) % 7 or 7
-            if qualified.group(1).lower() == "next":
+            if qualified and qualified.group(1).lower() == "next":
                 days_ahead += 7 if days_ahead <= 7 else 0
             due = (now + timedelta(days=days_ahead)).replace(
                 hour=hour if hour is not None else DEFAULT_HOUR,
@@ -170,7 +178,10 @@ def parse_follow_up(instruction: str, now: datetime) -> FollowUpParse:
                 resolution=FollowUpResolution.RESOLVED,
                 due_at=due,
                 raw_instruction=instruction,
-                reasoning=f"qualified weekday: {qualified.group(0)}",
+                reasoning=(
+                    f"qualified weekday: {qualified.group(0)}" if qualified
+                    else f"bare weekday '{name}' resolved because we asked"
+                ),
             )
 
     # 6. Something was said about following up, but nothing we can pin down.
