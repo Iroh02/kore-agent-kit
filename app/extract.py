@@ -106,6 +106,7 @@ def extract_lead_from_text(text: str, ledger: Ledger) -> LeadExtraction:
         component=Component.LLM,
         detail="lead_from_text",
         effort="low",
+        model=settings.text_model,
     )
 
 
@@ -133,12 +134,13 @@ def extract_lead_from_card(
         ledger=ledger,
         component=Component.VISION,
         detail="lead_from_card",
+        model=settings.vision_model,
     )
 
 
 def _parse_lead(
     system: str, content: list[dict], ledger: Ledger, component: Component,
-    detail: str, effort: str | None = None,
+    detail: str, effort: str | None = None, model: str | None = None,
 ) -> LeadExtraction:
     """One structured call, one retry on validation failure, then abstain.
 
@@ -157,10 +159,11 @@ def _parse_lead(
     messages = [{"role": "user", "content": content}]
 
     for attempt in range(2):
-        with ledger.span(component, settings.extraction_model, detail) as span:
+        use_model = model or settings.extraction_model
+        with ledger.span(component, use_model, detail) as span:
             try:
                 kwargs = dict(
-                    model=settings.extraction_model,
+                    model=use_model,
                     max_tokens=2048,
                     system=_system(system),
                     messages=messages,

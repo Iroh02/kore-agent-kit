@@ -17,7 +17,14 @@ class Settings(BaseSettings):
 
     # --- Claude -----------------------------------------------------------
     anthropic_api_key: str = ""
-    extraction_model: str = "claude-opus-5"
+    # Per-path model selection, measured not guessed. See DECISIONS.md D5.
+    #   text  -> sonnet-5 @ effort low : 2396ms  $0.0029
+    #   vision-> opus-5   @ default    : reading a photographed card is the
+    #            genuinely hard input, and that is where thinking earns its
+    #            cost. We do not trade card accuracy for 300ms.
+    text_model: str = "claude-sonnet-5"
+    vision_model: str = "claude-opus-5"
+    extraction_model: str = "claude-sonnet-5"   # default / notes
 
     # --- Microsoft Teams bot ---------------------------------------------
     # From the Azure Bot resource. Blank = channel disabled, app still runs.
