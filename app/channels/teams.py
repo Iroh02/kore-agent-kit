@@ -9,10 +9,16 @@ Anything that decides what bytes *mean* belongs in the pipeline.
 
 No Bot Framework SDK. The protocol is plain JSON over HTTPS:
 
-  token:  POST https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token
+  token:  POST https://login.microsoftonline.com/{authority}/oauth2/v2.0/token
           grant_type=client_credentials
           client_id={MS_APP_ID}  client_secret={MS_APP_PASSWORD}
           scope=https://api.botframework.com/.default
+
+          {authority} is the TENANT ID for a Single Tenant bot, and the
+          literal "botframework.com" for a Multi Tenant one. Using
+          botframework.com against a single-tenant registration fails with
+          AADSTS700016 "application not found in directory" - the app lives
+          in our tenant, not Microsoft's. Our Azure Bot is Single Tenant.
 
   reply:  POST {serviceUrl}/v3/conversations/{conversationId}/activities
           Authorization: Bearer {token}
@@ -30,10 +36,13 @@ import httpx
 from app.schemas import Attachment, InboundEvent, InputKind
 from app.settings import settings
 
-TOKEN_URL = (
-    "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token"
-)
 SCOPE = "https://api.botframework.com/.default"
+
+
+def _token_url() -> str:
+    """Single Tenant bots authenticate against their own tenant, not Microsoft's."""
+    authority = settings.ms_tenant_id or "botframework.com"
+    return f"https://login.microsoftonline.com/{authority}/oauth2/v2.0/token"
 
 # Teams sends files (and voice notes) with this contentType. The downloadUrl
 # on it is PRE-AUTHENTICATED - a plain GET works, no bearer token.
@@ -53,7 +62,7 @@ async def get_token() -> str:
 
     async with httpx.AsyncClient(timeout=15) as http:
         resp = await http.post(
-            TOKEN_URL,
+            _token_url(),
             data={
                 "grant_type": "client_credentials",
                 "client_id": settings.ms_app_id,
