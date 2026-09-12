@@ -7,4 +7,3 @@ venv/
 kore.db
 kore.db-journal
 *.sqlite
-fixtures/cards/*.png
