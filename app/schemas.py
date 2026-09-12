@@ -16,10 +16,11 @@ Optional.
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # ---------------------------------------------------------------------------
 # Inbound - what the channel adapter produces
@@ -55,6 +56,27 @@ class Attachment(BaseModel):
     download_url: str | None = None
     requires_auth: bool = False
     data: bytes | None = None  # populated once the channel has fetched it
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def _decode(cls, v):
+        """Accept base64 for binary, raw text for text.
+
+        Pydantic given a JSON string for a `bytes` field UTF-8 ENCODES it -
+        it does not base64-decode. So posting a base64 image or audio blob
+        to /api/simulate silently delivered the base64 *text* as the file,
+        and Deepgram answered "corrupt or unsupported data". Text payloads
+        like a .vcf happened to survive, which is what hid this.
+
+        Try base64 strictly first; fall back to utf-8 so a pasted vCard
+        still works.
+        """
+        if isinstance(v, str):
+            try:
+                return base64.b64decode(v, validate=True)
+            except Exception:
+                return v.encode("utf-8")
+        return v
 
 
 class InboundEvent(BaseModel):
