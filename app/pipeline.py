@@ -392,8 +392,23 @@ def _extract_for(event: InboundEvent, led: Ledger) -> LeadExtraction:
         return extract.extract_lead_from_card(att.data, att.content_type, led)
 
     if event.kind is InputKind.AUDIO:
-        # TODO(Nandita): transcribe.py -> then treat as text.
-        raise extract.ExtractionFailed("voice notes not wired yet")
+        # A voice note sent WITHOUT tapping "Add note" first. Transcribe it
+        # and treat the transcript as free text - someone describing a new
+        # lead out loud is a perfectly reasonable thing to do, and failing
+        # with "I couldn't read that" because a button wasn't pressed is a
+        # footgun in front of a judge.
+        att = next((a for a in event.attachments if a.data), None)
+        if not att:
+            raise extract.ExtractionFailed("no audio bytes on the event")
+        try:
+            transcript, _seconds = transcribe.transcribe(
+                att.data, att.content_type, led
+            )
+        except transcribe.TranscriptionFailed as exc:
+            raise extract.ExtractionFailed(f"could not transcribe: {exc}") from exc
+        if not transcript.strip():
+            raise extract.ExtractionFailed("transcript was empty")
+        return extract.extract_lead_from_text(transcript, led)
 
     return extract.extract_lead_from_text(event.text, led)
 
